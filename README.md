@@ -1,2 +1,2 @@
 # ombott
-This is bottle spin-off (One More BOTTle)
+This is bottle.py spin-off (One More BOTTle)
