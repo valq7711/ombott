@@ -189,12 +189,12 @@ class Route:
                     if peek(i) == '(':
                         i += 1  # eat `(`
                         # eat until `)[.+?]/` or `)/` or ')$' or `)[.+?]$`
-                        filter_args = eat('.*?(?=(\)(/|$))|(\)\[\w+\](/|$)))')
+                        filter_args = eat(r'.*?(?=(\)(/|$))|(\)\[\w+\](/|$)))')
                         if filter_args is None:
                             raise RouteSyntaxError(f'bad filter args syntax: ...{route[i:]}\n\tin {route}')
                         i += 1  # eat `)`
                         if peek(i) == '[':  # selector
-                            filter_selector = eat('\[(.+?)\]', 1)
+                            filter_selector = eat(r'\[(.+?)\]', 1)
                             if not filter_selector:
                                 raise RouteSyntaxError('filter selector value was expected')
                     elif filter:

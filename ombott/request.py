@@ -127,7 +127,7 @@ def _parse_qsl(qs, *, append:callable = None, setitem:callable = None):
 
 def cache_in(attr, key=None, read_only=False):
     # attr = 'environ[ PATH_INFO ]'
-    re_attr_key = re.compile('^(.+?)\[\s*([^\[\]]+?)\s*\]$')
+    re_attr_key = re.compile(r'^(.+?)\[\s*([^\[\]]+?)\s*\]$')
     if not key and (attr_key := re_attr_key.match(attr)):
         attr, key = attr_key.groups()
 

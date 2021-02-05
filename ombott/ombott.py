@@ -321,9 +321,8 @@ class Ombott:
 
     def wsgi(self, environ, start_response):
 
-        env = self.request.environ
         if (domain_map := getattr(config, 'domain_map', None)):
-            if (app_name := domain_map(env.get('HTTP_X_FORWARDED_HOST') or env.get('HTTP_HOST'))):
+            if (app_name := domain_map(environ.get('HTTP_X_FORWARDED_HOST') or environ.get('HTTP_HOST'))):
                 environ["HTTP_X_PY4WEB_APPNAME"] = '/' + app_name
                 environ["PATH_INFO"] = '/' + app_name + environ["PATH_INFO"]
 
