@@ -1,18 +1,25 @@
-import cgi
-import json as json_mod
-from urllib.parse import urljoin, SplitResult as UrlSplitResult
-from urllib.parse import quote as urlquote
 import base64
-
-from .request import cache_in, _parse_qsl
+import cgi
+from functools import partial
 from http.cookies import SimpleCookie
+import json as json_mod
+from urllib.parse import (
+    quote as urlquote,
+    unquote as urlunquote,
+    urljoin,
+    SplitResult as UrlSplitResult
+)
+
 from .helpers import (
     touni, tob,
+    cache_in,
     cookie_decode,
     WSGIHeaderDict, FormsDict,
     FileUpload
 )
 
+
+urlunquote = partial(urlunquote, encoding='latin1')
 
 # fix bug cgi.FieldStorage context manager bug https://github.com/python/cpython/pull/14815
 def cgi_monkey_patch():
@@ -33,6 +40,57 @@ def on_env_changed(request, key, v):
         todelete = ('headers', 'cookies')
     for key in todelete:
         request.environ.pop('ombott.request.' + key, None)
+
+
+def _parse_qsl(qs, *, append: callable = None, setitem: callable = None):
+    container = None
+    if setitem:
+        _seen = dict()
+        _lists = dict()
+        def add(k, v):
+            if (vlist := _lists.get(k)):
+                vlist.append(v)
+            elif k in _seen:
+                tmp = _lists[k] = [_seen[k], v]
+                setitem(k, tmp)
+            else:
+                setitem(k, _seen.setdefault(k, v))
+    elif append:
+        add = lambda k, v: append((k, v))
+    else:
+        container = []
+        _append = container.append
+        add = lambda k, v: _append((k, v))
+
+    L = len(qs)
+    i = 0
+    while i < L:
+        key = None
+        idx = 0; c = None
+        for idx, c in enumerate(qs[i:]):
+            if c == '=' or c == '&':
+                break
+        else:
+            idx += 1
+        j = i + idx
+        key = qs[i:j]
+        i = j+1  # skip '=' or '&'
+        if not key: continue
+        key = urlunquote(key.replace('+', ' '))
+        if c == '&':
+            value = ''
+        else:
+            idx = 0; c = None
+            for idx, c in enumerate(qs[i:]):
+                if c == '&':
+                    break
+            else:
+                idx += 1
+            j = i + idx
+            value = urlunquote(qs[i:j].replace('+', ' '))
+            i = j + 1  # skip '&'
+        add(key, value)
+    return container
 
 
 def mixin():
@@ -194,17 +252,28 @@ def mixin():
             fp= self.body, environ= safe_env, keep_blank_values= True,
             encoding = 'utf8'
         )
+        listified = set()
         with cgi.FieldStorage(**args) as data:
             self['_cgi.FieldStorage'] = data  # http://bugs.python.org/issue18394#msg207958
             data = data.list or []
             for item in data:
                 if item.filename:
-                    post[item.name] = FileUpload(
+                    it = FileUpload(
                         item.file, item.name,
                         item.filename, item.headers
                     )
                 else:
-                    post[item.name] = item.value
+                    it = item.value
+                key = item.name
+
+                if key in post:
+                    el = post[key]
+                    if key not in listified:
+                        el = post[key] = [el]
+                        listified.add(key)
+                    el.append(it)
+                else:
+                    post[key] = it
         return post
 
     @cache_in('environ[ ombott.request.url ]', read_only=True)

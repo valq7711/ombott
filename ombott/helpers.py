@@ -13,6 +13,7 @@ from unicodedata import normalize
 
 
 class OmbottException(Exception):
+    __slots__ = ()
     pass
 
 
@@ -71,7 +72,7 @@ def html_escape(string):
 
 
 # ------------------[ thread safe props] -------------------
-def ts_props(*props, as_slots = False):
+def ts_props(*props):
     def wrapper(cls):
         local_store = threading.local()
         for k in props:
@@ -84,10 +85,6 @@ def ts_props(*props, as_slots = False):
                     (lambda n = k: lambda s: delattr(local_store, n))(),
                 )
             )
-        if as_slots:
-            if not getattr(cls, '__slots__', None):
-                cls.__slots__ = []
-            cls.__slots__.extend(props)
         return cls
     return wrapper
 
@@ -104,7 +101,52 @@ def proxy(prop, attrs, cls = None):
     return injector if not cls else injector(cls)
 
 
+# ------------------[ exposes prop callable attrubutes at instance level] -------------------
+def cache_in(attr, key=None, read_only=False):
+    # attr = 'environ[ PATH_INFO ]'
+    re_attr_key = re.compile(r'^(.+?)\[\s*([^\[\]]+?)\s*\]$')
+    if not key and (attr_key := re_attr_key.match(attr)):
+        attr, key = attr_key.groups()
+
+    def wrapper(getter):
+        def maybe_readonly():
+            if read_only: raise AttributeError("Read-Only property.")
+
+        if not key:
+            def fget(self):
+                try:
+                    return getattr(self, attr)
+                except AttributeError:
+                    setattr(self, attr, getter(self))
+                    return getattr(self, attr)
+
+            def fset(self, value):
+                maybe_readonly()
+                setattr(self, attr, value)
+
+            def fdel(self):
+                maybe_readonly()
+                delattr(self, attr)
+        else:
+            def fget(self):
+                storage = getattr(self, attr)
+                if key not in storage:
+                    storage[key] = getter(self)
+                return storage[key]
+
+            def fset(self, value):
+                maybe_readonly()
+                getattr(self, attr)[key] = value
+
+            def fdel(self):
+                maybe_readonly()
+                del getattr(self, attr)[key]
+
+        return property(fget, fset, fdel, 'cache_in')
+    return wrapper
+
 # ------------------[ helper classes] -------------------
+
 
 class cached_property(object):
     ''' A property that is only computed once per instance and then replaces
@@ -126,7 +168,6 @@ class NameSpace(types.SimpleNamespace):
     nsd.some       # - fast
     nsd['some']    # - 20...30% slower
     '''
-    __slots__ = 'a', 'b'
     __getitem__ = types.SimpleNamespace.__getattribute__
     __setitem__ = types.SimpleNamespace.__setattr__
     get = lambda s, k, d: s.__dict__.get(k, d)
@@ -196,6 +237,8 @@ def _hval(value):
 
 @proxy('dict', 'keys pop popitem values items get'.split())
 class HeaderDict(DictMixin):
+    __slots__ = ('_ts',)
+
     dict = property(
         (lambda s: s._ts.dict),
         (lambda s, v: setattr(s._ts, 'dict', v)),
@@ -276,7 +319,7 @@ class WSGIHeaderDict(DictMixin):
 
     def __iter__(self):
         for key in self.environ:
-            if key[:5] == 'HTTP_':
+            if key.startswith('HTTP_'):
                 yield key[5:].replace('_', '-').title()
             elif key in self.cgikeys:
                 yield key.replace('_', '-').title()

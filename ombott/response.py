@@ -1,15 +1,16 @@
-
-import time
+from datetime import date as datedate, datetime, timedelta
 import email.utils
 import http.client as httplib
 from http.cookies import SimpleCookie
+import time
+
 from .helpers import (
-    ts_props, touni,
-    HeaderDict, HeaderProperty,
+    ts_props,
+    touni,
     cookie_encode,
+    HeaderDict, HeaderProperty,
     OmbottException
 )
-from datetime import date as datedate, datetime, timedelta
 
 
 def http_date(value):
@@ -30,6 +31,9 @@ def parse_date(ims):
     except (TypeError, ValueError, IndexError, OverflowError):
         return None
 
+_response_slots = (
+    '_status_line', '_status_code', 'headers', '_headers', '_cookies', 'body'
+)
 
 class BaseResponse:
     """ Storage class for a response body as well as headers and cookies.
@@ -47,9 +51,10 @@ class BaseResponse:
         Underscores in the header name are replaced with dashes.
     """
 
+    __slots__ = ()
+
     default_status = 200
     default_content_type = 'text/html; charset=UTF-8'
-
 
     # Header blacklist for specific response codes
     # (rfc2616 section 10.2.3 and 10.3.5)
@@ -104,7 +109,20 @@ class BaseResponse:
         ''' The HTTP status code as an integer (e.g. 404).'''
         return self._status_code
 
-    def _set_status(self, status):
+    @property
+    def status(self):
+        """ A writeable property to change the HTTP response status.
+
+            It accepts either a numeric code (100-999) or a string with
+            a custom reason phrase (e.g. "404 Brain not found").
+            Both :data:`status_line` and :data:`status_code` are updated
+            accordingly. The return value is always a status string.
+
+        """
+        return self._status_line
+
+    @status.setter
+    def status(self, status):
         if isinstance(status, int):
             code, status = status, _HTTP_STATUS_LINES.get(status)
         elif ' ' in status:
@@ -115,18 +133,6 @@ class BaseResponse:
         if not 100 <= code <= 999: raise ValueError('Status code out of range.')
         self._status_code = code
         self._status_line = str(status or ('%d Unknown' % code))
-
-    def _get_status(self):
-        return self._status_line
-
-    status = property(
-        _get_status, _set_status, None,
-        ''' A writeable property to change the HTTP response status. It accepts
-            either a numeric code (100-999) or a string with a custom reason
-            phrase (e.g. "404 Brain not found"). Both :data:`status_line` and
-            :data:`status_code` are updated accordingly. The return value is
-            always a status string. ''')
-    del _get_status, _set_status
 
     bad_headers = {
         204: set(('Content-Type',)),
@@ -244,16 +250,18 @@ class BaseResponse:
 @ts_props(
     '_status_line', '_status_code',
     '_headers', '_cookies', 'body',
-    as_slots = True
 )
 class Response(BaseResponse):
-    pass
+    __slots__ = _response_slots
 
 
 ###############################################################################
 # Exceptions & Commons ########################################################
 ###############################################################################
 class HTTPResponse(BaseResponse, OmbottException):
+
+    __slots__ = _response_slots
+
     def __init__(self, body='', status=None, headers=None, **more_headers):
         super().__init__(body, status, headers, **more_headers)
 
@@ -268,6 +276,7 @@ class HTTPResponse(BaseResponse, OmbottException):
 
 
 class HTTPError(HTTPResponse):
+    __slots__ = ('exception', 'traceback')
     default_status = 500
 
     def __init__(self, status=None, body=None, exception=None, traceback=None,
@@ -285,4 +294,4 @@ HTTP_CODES[428] = "Precondition Required"
 HTTP_CODES[429] = "Too Many Requests"
 HTTP_CODES[431] = "Request Header Fields Too Large"
 HTTP_CODES[511] = "Network Authentication Required"
-_HTTP_STATUS_LINES = dict((k, '%d %s' % (k, v)) for (k, v) in HTTP_CODES.items())
+_HTTP_STATUS_LINES = {code: f'{code} {msg}' for (code, msg) in HTTP_CODES.items()}

@@ -12,13 +12,13 @@ from .helpers import (
     cached_property, WSGIFileWrapper, parse_range_header,
     parse_date, html_escape, tob
 )
-from .radirouter import RadiRouter
-from .request import Request, BaseRequest
+from .radirouter import HookTypes, RadiRouter
+from .request import Request, BaseRequest  # noqa
 from . import request_mixin
 from .response import Response, HTTPResponse, HTTPError
 from . import server_adapters
 
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 
 HTTP_METHODS = 'DELETE GET HEAD OPTIONS PATCH POST PUT'.split()
 
@@ -68,14 +68,14 @@ def run(app=None, server='wsgiref', host='127.0.0.1', port=8080,
         pass
     except (SystemExit, MemoryError):
         raise
-    except:
+    except:  # noqa
         raise
 
 
 def with_method_shortcuts(methods):
     def injector(cls):
         for m in methods:
-            setattr(cls, m.lower(), functools.partialmethod(cls.route, method = m))
+            setattr(cls, m.lower(), functools.partialmethod(cls.route, method=m))
         return cls
     return injector
 
@@ -92,34 +92,30 @@ class Ombott:
         self.request = Request()
         self.response = Response()
         self._route_hooks = {}
-        self.error_handler = {}
+        self.error_handler = {'404-hooks': {}}
 
     def run(self, **kwargs):
         ''' Calls :func:`run` with the same parameters. '''
         run(self, **kwargs)
 
-    def to_route(self, environ):
-        verb = environ['REQUEST_METHOD'].upper()
-        path = environ['PATH_INFO'] or '/'
-
+    def to_route(self, path, verb):
         if verb == 'HEAD':
             methods = [verb, 'GET', 'ANY']
         else:
             methods = [verb, 'ANY']
-        tmp, error = self.router.get(path, methods)
-        if error:
-            raise HTTPError(*error)
-        route, names, values, hooks = tmp
-        param_values = []
-        params = {n: v for n, v in zip(names, values) if n and (param_values.append(v) or True)}
-        return route, params, param_values, hooks
+        end_point, error404_405 = self.router.get(path, methods)
+        return (end_point, error404_405)
 
-    def add_route(self, rule, method, handler, name = None):
-        self.router.add(rule, method, handler, name)
+    def add_route(self, rule, method, handler, name=None, *, overwrite=False):
+        self.router.add(rule, method, handler, name, overwrite=overwrite)
 
-    def route(self, rule=None, method='GET', *, callback=None, name=None):
+    def remove_route(self, rule=None, *, route_pattern=None, name=None):
+        self.router.remove(rule, route_pattern=route_pattern, name=name)
+
+    def route(self, rule=None, method='GET', callback=None,
+              *, name=None, overwrite=False):
         def decorator(callback):
-            self.add_route(rule, method, callback, name)
+            self.add_route(rule, method, callback, name, overwrite=overwrite)
             return callback
         return decorator(callback) if callback else decorator
 
@@ -127,26 +123,37 @@ class Ombott:
     def routes(self):
         return self.router.routes
 
-    __hook_names = 'before_request', 'after_request', 'app_reset', 'config'
-    __hook_reversed = 'after_request'
+    __hook_names = ('before_request', 'after_request', 'app_reset', 'config')
+    __hook_reversed = {'after_request'}
 
     @cached_property
     def _hooks(self):
-        return dict((name, []) for name in self.__hook_names)
+        return {name: [] for name in self.__hook_names}
 
     def add_hook(self, name, func):
-        ''' Attach a callback to a hook. Three hooks are currently implemented:
+        """Attach a callback to a hook.
 
-            before_request
+        Three hooks are currently implemented:
+            `before_request`
                 Executed once before each request. The request context is
                 available, but no routing has happened yet.
-            after_request
+            `after_request`
                 Executed once after each request regardless of its outcome.
-        '''
+
+        """
         if name in self.__hook_reversed:
             self._hooks[name].insert(0, func)
         else:
             self._hooks[name].append(func)
+
+    def on(self, name, func=None):
+        if not func:  # used as decorator
+            def decorator(func):
+                self.add_hook(name, func)
+                return func
+            return decorator
+        else:
+            self.add_hook(name, func)
 
     def remove_hook(self, name, func):
         if func in self._hooks[name]:
@@ -156,45 +163,28 @@ class Ombott:
     def emit(self, name, *args, **kwargs):
         [hook(*args, **kwargs) for hook in self._hooks[name][:]]
 
-    def on(self, name, func = None):
+    def on_route(self, rule, func=None):
         if not func:  # used as decorator
             def decorator(func):
-                self.add_hook(name, func)
+                self.router.add_hook(rule, func)
                 return func
             return decorator
         else:
-            self.add_hook(name, func)
+            self.router.add_hook(rule, func)
 
-    def add_route_hook(self, route, func = None):
-        self.router.add_hook(route, func)
-        if not (rhooks := self._route_hooks.get(route)):
-            self._route_hooks[route] = [func]
-        else:
-            rhooks.append(func)
+    def remove_route_hook(self, rule):
+        self.router.remove_hook(rule)
 
-    def remove_route_hook(self, route, func = None):
-        self.router.remove_hook(route, func)
-        if not (rhooks := self._route_hooks.get(route)):
-            return
-        else:
-            try:
-                rhooks.remove(func)
-            except ValueError:
-                pass
-
-    def on_route(self, route, func = None):
-        if not func:  # used as decorator
-            def decorator(func):
-                self.add_route_hook(route, func)
-                return func
-            return decorator
-        else:
-            self.add_route_hook(route, func)
-
-    def error(self, code=500):
+    def error(self, code=500, rule=None):
         """ Decorator: Register an output handler for a HTTP error code"""
+        code = int(code)
+
         def wrapper(handler):
-            self.error_handler[int(code)] = handler
+            if code == 404 and rule:
+                route_pattern = self.router.add_hook(rule, handler, hook_type=HookTypes.PARTIAL)
+                self.error_handler['404-hooks'][route_pattern] = handler
+            else:
+                self.error_handler[code] = handler
             return handler
         return wrapper
 
@@ -207,26 +197,50 @@ class Ombott:
         self.response.headers['Content-Type'] = 'application/json'
         return ret
 
+    @staticmethod
+    def handler(app: 'Ombott', route, kwargs, route_hooks, error404_405):
+        if error404_405:
+            status, body, extra = error404_405
+            if status == 405:
+                raise HTTPError(status, body, Allow=extra)
+            else:  # not found
+                if (hooks_collected := extra['hooks']):
+                    route_pos, hooks = hooks_collected[-1]
+                    if (partial_hook := hooks[HookTypes.PARTIAL]):
+                        hook_route = app.request.path[:1 + route_pos]
+                        return partial_hook(hook_route, extra['param_values'])
+                raise HTTPError(status, body)
+        if route_hooks:
+            path = app.request.path
+            for route_pos, hooks in route_hooks:
+                if (hook := hooks[HookTypes.SIMPLE]):
+                    hook(path[:1 + route_pos])
+        return route(**kwargs)
+
     def _handle(self, environ):
         response = self.response
         request = self.request
 
         path = environ['ombott.raw_path'] = environ['PATH_INFO']
         try:
-            environ['PATH_INFO'] = path.encode('latin1').decode('utf8')
+            path = path.encode('latin1').decode('utf8')
         except UnicodeError:
             return HTTPError(400, 'Invalid path string. Expected UTF-8')
+        environ['PATH_INFO'] = path
         try:  # init thread
             environ['ombott.app'] = self
             request.__init__(environ)
             response.__init__()
             try:  # routing
                 self.emit('before_request')
-                route, args, values, route_hooks = self.to_route(environ)
-                environ['ombott.route'] = route
-                environ['route.url_args'] = args
-                environ['route.hooks'] = route_hooks
-                return route(**args)
+                route, kwargs, route_hooks = (None, None, None)
+                end_point, error404_405 = self.to_route(request.path, request.method)
+                if end_point:
+                    route, kwargs, route_hooks = end_point
+                    environ['ombott.route'] = route
+                    environ['route.url_args'] = kwargs
+                    environ['route.hooks'] = route_hooks
+                return self.handler(self, route, kwargs, route_hooks, error404_405)
             finally:
                 self.emit('after_request')
         except HTTPResponse as resp:
@@ -315,8 +329,8 @@ class Ombott:
             else:
                 out = HTTPError(500, f'Unsupported response type: {type(first)}')
                 continue                                         # -----------------^
-            if hasattr(out, 'close'):
-                new_iter = _closeiter(new_iter, out.close)
+            if (close := getattr(out, 'close', None)):
+                new_iter = _closeiter(new_iter, close)
             return new_iter
 
     def wsgi(self, environ, start_response):
@@ -330,10 +344,12 @@ class Ombott:
         try:
             out = self._cast(self._handle(environ))
             # rfc2616 section 4.3
-            if response._status_code in (100, 101, 204, 304) \
-            or environ['REQUEST_METHOD'] == 'HEAD':
-                if hasattr(out, 'close'):
-                    out.close()
+            if (
+                response._status_code in {100, 101, 204, 304}
+                or environ['REQUEST_METHOD'] == 'HEAD'
+            ):
+                if (close := getattr(out, 'close', None)):
+                    close()
                 out = []
             start_response(response._status_line, response.headerlist)
             return out
@@ -344,9 +360,11 @@ class Ombott:
             err = '<h1>Critical error while processing request: %s</h1>' \
                   % html_escape(environ.get('PATH_INFO', '/'))
             if True:  # DEBUG: FIX ME
-                err += '<h2>Error:</h2>\n<pre>\n%s\n</pre>\n' \
-                       '<h2>Traceback:</h2>\n<pre>\n%s\n</pre>\n' \
-                       % (html_escape(repr(_e)), html_escape(format_exc()))
+                err += (
+                    '<h2>Error:</h2>\n<pre>\n%s\n</pre>\n'
+                    '<h2>Traceback:</h2>\n<pre>\n%s\n</pre>\n'
+                    % (html_escape(repr(_e)), html_escape(format_exc()))
+                )
             environ['wsgi.errors'].write(err)
             headers = [('Content-Type', 'text/html; charset=UTF-8')]
             start_response('500 INTERNAL SERVER ERROR', headers, sys.exc_info())
@@ -399,7 +417,7 @@ def static_file(filename, root, mimetype='auto', download=False, charset='UTF-8'
             mime-type. (default: UTF-8)
     """
 
-    def _file_iter_range(fp, offset, bytes, maxread = 1024 * 1024):
+    def _file_iter_range(fp, offset, bytes, maxread=1024 * 1024):
         ''' Yield chunks from a range in a file. No chunk is bigger than maxread.'''
         fp.seek(offset)
         while bytes > 0 and (part := fp.read(min(bytes, maxread))):
@@ -419,7 +437,8 @@ def static_file(filename, root, mimetype='auto', download=False, charset='UTF-8'
 
     if mimetype == 'auto':
         mimetype, encoding = mimetypes.guess_type(filename)
-        if encoding: headers['Content-Encoding'] = encoding
+        if encoding:
+            headers['Content-Encoding'] = encoding
 
     if mimetype:
         if mimetype[:5] == 'text/' and charset and 'charset' not in mimetype:
