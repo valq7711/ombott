@@ -15,3 +15,7 @@ from .ombott import (
     run,
     __version__
 )
+
+__author__ = "Valery Kucherov <valq7711@gmail.com>"
+__copyright__ = "Copyright (c) 2009-2018, Marcel Hellkamp; Copyright (C) 2021 Valery Kucherov"
+__license__ = "MIT"
