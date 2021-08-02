@@ -14,7 +14,6 @@ setup(
     description="One More BOTTle",
     packages=['ombott'],
     platforms="any",
-    scripts=['ombott.py'],
     keywords='python webapplication',
     classifiers=[
         "Development Status :: 1 - Planning",
