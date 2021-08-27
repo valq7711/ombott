@@ -1,20 +1,19 @@
-import os
 import sys
 import json
 import functools
 from traceback import format_exc
-import mimetypes
-import time
 import itertools
 from urllib.parse import urljoin
 
-from .helpers import (
-    cached_property, WSGIFileWrapper, parse_range_header,
-    parse_date, html_escape, tob
+from .common_helpers import (
+    html_escape,
+    tob,
+    cached_property,
+    WSGIFileWrapper,
+    SimpleConfig,
 )
-from .radirouter import HookTypes, RadiRouter
-from .request import Request, BaseRequest  # noqa
-from . import request_mixin
+from .router import HookTypes, RadiRouter
+from .request import Request, errors as request_errors
 from .response import Response, HTTPResponse, HTTPError
 from . import server_adapters
 
@@ -22,14 +21,21 @@ __version__ = "0.0.2"
 
 HTTP_METHODS = 'DELETE GET HEAD OPTIONS PATCH POST PUT'.split()
 
-Request.mixin(request_mixin.mixin())
 
+class DefaultConfig(SimpleConfig):
+    catchall = True
+    debug = False
+    domain_map = {}
 
-class Config:
-    __slots__ = 'domain_map'
-
-
-config = Config()
+    # request specific
+    app_name_header = ''
+    errors_map = {
+        request_errors.RequestError: HTTPError(400, 'Bad request'),
+        request_errors.BodySizeError: HTTPError(413, 'Request entity too large'),
+        request_errors.BodyParsingError: HTTPError(400, 'Error while parsing chunked transfer body'),
+    }
+    max_body_size = None
+    max_memfile_size = 100 * 1024
 
 
 class _closeiter:
@@ -48,7 +54,7 @@ class _closeiter:
 
 
 def run(app=None, server='wsgiref', host='127.0.0.1', port=8080,
-        quiet=False, **kargs):
+        quiet=False, **kwargs):
     _stderr = sys.stderr.write
     try:
         app = app or default_app()
@@ -57,7 +63,7 @@ def run(app=None, server='wsgiref', host='127.0.0.1', port=8080,
         server_names = server_adapters.server_names
         if server in server_names:
             server = server_names.get(server)
-        server = server(host=host, port=port, **kargs)
+        server = server(host=host, port=port, **kwargs)
         server.quiet = server.quiet or quiet
         if not server.quiet:
             _stderr("Ombott v%s server starting up (using %s)...\n" % (__version__, repr(server)))
@@ -86,13 +92,19 @@ def with_method_shortcuts(methods):
 
 @with_method_shortcuts(HTTP_METHODS)
 class Ombott:
+    __slots__ = ('config', 'router', 'request', 'response', '_route_hooks', 'error_handlers', '__dict__')
 
-    def __init__(self):
+    def __init__(self, config=None):
+        self.config = config = DefaultConfig(config)
         self.router = RadiRouter()
-        self.request = Request()
+        self.request = Request(config=config)
         self.response = Response()
         self._route_hooks = {}
-        self.error_handler = {'404-hooks': {}}
+        self.error_handlers = {'404-hooks': {}}
+
+    def setup(self, config):
+        self.config = config = DefaultConfig(config)
+        self.request.setup(config)
 
     def run(self, **kwargs):
         ''' Calls :func:`run` with the same parameters. '''
@@ -103,7 +115,7 @@ class Ombott:
             methods = [verb, 'GET', 'ANY']
         else:
             methods = [verb, 'ANY']
-        end_point, error404_405 = self.router.get(path, methods)
+        end_point, error404_405 = self.router.resolve(path, methods)
         return (end_point, error404_405)
 
     def add_route(self, rule, method, handler, name=None, *, overwrite=False):
@@ -119,11 +131,20 @@ class Ombott:
             return callback
         return decorator(callback) if callback else decorator
 
+    # overwrites by @with_method_shortcuts()
+    def delete(self, rule=None, callback=None, *, name=None, overwrite=False): pass
+    def get(self, rule=None, callback=None, *, name=None, overwrite=False): pass
+    def head(self, rule=None, callback=None, *, name=None, overwrite=False): pass
+    def options(self, rule=None, callback=None, *, name=None, overwrite=False): pass
+    def patch(self, rule=None, callback=None, *, name=None, overwrite=False): pass
+    def post(self, rule=None, callback=None, *, name=None, overwrite=False): pass
+    def put(self, rule=None, callback=None, *, name=None, overwrite=False): pass
+
     @property
     def routes(self):
         return self.router.routes
 
-    __hook_names = ('before_request', 'after_request', 'app_reset', 'config')
+    __hook_names = ('before_request', 'after_request')
     __hook_reversed = {'after_request'}
 
     @cached_property
@@ -182,9 +203,9 @@ class Ombott:
         def wrapper(handler):
             if code == 404 and rule:
                 route_pattern = self.router.add_hook(rule, handler, hook_type=HookTypes.PARTIAL)
-                self.error_handler['404-hooks'][route_pattern] = handler
+                self.error_handlers['404-hooks'][route_pattern] = handler
             else:
-                self.error_handler[code] = handler
+                self.error_handlers[code] = handler
             return handler
         return wrapper
 
@@ -210,6 +231,7 @@ class Ombott:
                         hook_route = app.request.path[:1 + route_pos]
                         return partial_hook(hook_route, extra['param_values'])
                 raise HTTPError(status, body)
+
         if route_hooks:
             path = app.request.path
             for route_pos, hooks in route_hooks:
@@ -273,21 +295,20 @@ class Ombott:
 
             # Empty output is done here
             if not out:
-                if 'Content-Length' not in resp_headers:
-                    resp_headers['Content-Length'] = 0
+                resp_headers.setdefault('Content-Length', 0)
                 return []
 
             if isinstance(out, str):
                 out = out.encode(response.charset)
+
             # Byte Strings are just returned
             if isinstance(out, bytes):
-                if 'Content-Length' not in resp_headers:
-                    resp_headers['Content-Length'] = len(out)
+                resp_headers.setdefault('Content-Length', len(out))
                 return [out]
 
             if isinstance(out, HTTPError):
                 out.apply(response)
-                out = self.error_handler.get(
+                out = self.error_handlers.get(
                     out.status_code,
                     self.default_error_handler
                 )(out); continue                         # -----------------^
@@ -324,8 +345,7 @@ class Ombott:
             elif isinstance(first, bytes):
                 new_iter = itertools.chain([first], iout)
             elif isinstance(first, str):
-                encoder = lambda x: x.encode(response.charset)
-                new_iter = map(encoder, itertools.chain([first], iout))
+                new_iter = (it.encode(response.charset) for it in itertools.chain([first], iout))
             else:
                 out = HTTPError(500, f'Unsupported response type: {type(first)}')
                 continue                                         # -----------------^
@@ -334,13 +354,14 @@ class Ombott:
             return new_iter
 
     def wsgi(self, environ, start_response):
+        config: DefaultConfig = self.config
+        response = self.response
 
-        if (domain_map := getattr(config, 'domain_map', None)):
+        if (domain_map := config.domain_map):
             if (app_name := domain_map(environ.get('HTTP_X_FORWARDED_HOST') or environ.get('HTTP_HOST'))):
-                environ["HTTP_X_PY4WEB_APPNAME"] = '/' + app_name
+                environ[config.app_name_header] = '/' + app_name
                 environ["PATH_INFO"] = '/' + app_name + environ["PATH_INFO"]
 
-        response = self.response
         try:
             out = self._cast(self._handle(environ))
             # rfc2616 section 4.3
@@ -356,10 +377,12 @@ class Ombott:
         except (KeyboardInterrupt, SystemExit, MemoryError):
             raise
         except Exception as _e:
-            # if not self.catchall: raise
+            if not self.config.catchall:
+                raise
+
             err = '<h1>Critical error while processing request: %s</h1>' \
                   % html_escape(environ.get('PATH_INFO', '/'))
-            if True:  # DEBUG: FIX ME
+            if self.config.debug:
                 err += (
                     '<h2>Error:</h2>\n<pre>\n%s\n</pre>\n'
                     '<h2>Traceback:</h2>\n<pre>\n%s\n</pre>\n'
@@ -379,126 +402,36 @@ class Ombott:
 ###############################################################################
 
 
-def abort(code=500, text='Unknown Error.'):
+def abort(code=500, text='Unknown Error'):
     """ Aborts execution and causes a HTTP error. """
     raise HTTPError(code, text)
 
 
 def redirect(location, code=None):
-    url = location
     """ Aborts execution and causes a 303 or 302 redirect, depending on
-        the HTTP protocol version. """
+        the HTTP protocol version.
+
+    """
+    response = Globals.response
+    request = Globals.request
+    url = location
     if not code:
         code = 303 if request.get('SERVER_PROTOCOL') == "HTTP/1.1" else 302
     res = response.copy(cls=HTTPResponse)
     res.status = code
     res.body = ""
-    res.set_header('Location', urljoin(request.url, url))
+    res.headers['Location'] = urljoin(request.url, url)
     raise res
 
 
-def static_file(filename, root, mimetype='auto', download=False, charset='UTF-8'):
-    """ Open a file in a safe way and return :exc:`HTTPResponse` with status
-        code 200, 305, 403 or 404. The ``Content-Type``, ``Content-Encoding``,
-        ``Content-Length`` and ``Last-Modified`` headers are set if possible.
-        Special support for ``If-Modified-Since``, ``Range`` and ``HEAD``
-        requests.
-
-        :param filename: Name or path of the file to send.
-        :param root: Root path for file lookups. Should be an absolute directory
-            path.
-        :param mimetype: Defines the content-type header (default: guess from
-            file extension)
-        :param download: If True, ask the browser to open a `Save as...` dialog
-            instead of opening the file with the associated program. You can
-            specify a custom filename as a string. If not specified, the
-            original filename is used (default: False).
-        :param charset: The charset to use for files with a ``text/*``
-            mime-type. (default: UTF-8)
-    """
-
-    def _file_iter_range(fp, offset, bytes, maxread=1024 * 1024):
-        ''' Yield chunks from a range in a file. No chunk is bigger than maxread.'''
-        fp.seek(offset)
-        while bytes > 0 and (part := fp.read(min(bytes, maxread))):
-            bytes -= len(part)
-            yield part
-
-    root = os.path.abspath(root) + os.sep
-    filename = os.path.abspath(os.path.join(root, filename.strip('/\\')))
-    headers = dict()
-
-    if not filename.startswith(root):
-        return HTTPError(403, "Access denied.")
-    if not os.path.exists(filename) or not os.path.isfile(filename):
-        return HTTPError(404, "File does not exist.")
-    if not os.access(filename, os.R_OK):
-        return HTTPError(403, "You do not have permission to access this file.")
-
-    if mimetype == 'auto':
-        mimetype, encoding = mimetypes.guess_type(filename)
-        if encoding:
-            headers['Content-Encoding'] = encoding
-
-    if mimetype:
-        if mimetype[:5] == 'text/' and charset and 'charset' not in mimetype:
-            mimetype += '; charset=%s' % charset
-        headers['Content-Type'] = mimetype
-
-    if download:
-        download = os.path.basename(filename if download is True else download)
-        headers['Content-Disposition'] = 'attachment; filename="%s"' % download
-
-    stats = os.stat(filename)
-    headers['Content-Length'] = clen = stats.st_size
-    lm = time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime(stats.st_mtime))
-    headers['Last-Modified'] = lm
-
-    ims = request.environ.get('HTTP_IF_MODIFIED_SINCE')
-    if ims:
-        ims = parse_date(ims.split(";")[0].strip())
-    if ims is not None and ims >= int(stats.st_mtime):
-        headers['Date'] = time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime())
-        return HTTPResponse(status=304, **headers)
-
-    body = '' if request.method == 'HEAD' else open(filename, 'rb')
-
-    headers["Accept-Ranges"] = "bytes"
-    ranges = request.environ.get('HTTP_RANGE')
-    if 'HTTP_RANGE' in request.environ:
-        ranges = list(parse_range_header(request.environ['HTTP_RANGE'], clen))
-        if not ranges:
-            return HTTPError(416, "Requested Range Not Satisfiable")
-        offset, end = ranges[0]
-        headers["Content-Range"] = f"bytes {offset}-{end-1}/{clen}"
-        headers["Content-Length"] = str(end - offset)
-        if body:
-            body = _file_iter_range(body, offset, end - offset)
-        return HTTPResponse(body, status=206, **headers)
-    return HTTPResponse(body, **headers)
-
-
-app = None
-route = None
-on_route = None
-request = None
-response = None
-error = None
-
-
-def app_make():
-    global app, route, on_route, request, response, error
+class Globals:
     app = Ombott()
     route = app.route
     on_route = app.on_route
     request = app.request
     response = app.response
     error = app.error
-    return app
 
 
 def default_app():
-    global app
-    if not app:
-        app_make()
-    return app
+    return Globals.app

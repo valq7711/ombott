@@ -1,16 +1,16 @@
 from datetime import date as datedate, datetime, timedelta
-import email.utils
 import http.client as httplib
 from http.cookies import SimpleCookie
 import time
 
-from .helpers import (
+from .common_helpers import (
     ts_props,
     touni,
     cookie_encode,
+    parse_date,
     HeaderDict, HeaderProperty,
-    OmbottException
 )
+from .errors import OmbottException
 
 
 def http_date(value):
@@ -23,17 +23,10 @@ def http_date(value):
     return value
 
 
-def parse_date(ims):
-    """ Parse rfc1123, rfc850 and asctime timestamps and return UTC epoch. """
-    try:
-        ts = email.utils.parsedate_tz(ims)
-        return time.mktime(ts[:8] + (0,)) - (ts[9] or 0) - time.timezone
-    except (TypeError, ValueError, IndexError, OverflowError):
-        return None
-
 _response_slots = (
-    '_status_line', '_status_code', 'headers', '_headers', '_cookies', 'body'
+    '_status_line', '_status_code', 'headers', '_headers', '_cookies', 'body', '_ts_props'
 )
+
 
 class BaseResponse:
     """ Storage class for a response body as well as headers and cookies.
@@ -51,6 +44,8 @@ class BaseResponse:
         Underscores in the header name are replaced with dashes.
     """
 
+    headers: HeaderDict = None
+
     __slots__ = ()
 
     default_status = 200
@@ -58,6 +53,12 @@ class BaseResponse:
 
     # Header blacklist for specific response codes
     # (rfc2616 section 10.2.3 and 10.3.5)
+    bad_headers = {
+        204: {'Content-Type'},
+        304: {'Allow', 'Content-Encoding', 'Content-Language',
+              'Content-Length', 'Content-Range', 'Content-Type',
+              'Content-Md5', 'Last-Modified'}
+    }
 
     def __new__(cls, *a, **kw):
         self = super().__new__(cls, *a, **kw)
@@ -127,18 +128,13 @@ class BaseResponse:
             code, status = status, _HTTP_STATUS_LINES.get(status)
         elif ' ' in status:
             status = status.strip()
-            code   = int(status.split()[0])
+            code = int(status.split()[0])
         else:
             raise ValueError('String status line without a reason phrase.')
-        if not 100 <= code <= 999: raise ValueError('Status code out of range.')
+        if not 100 <= code <= 999:
+            raise ValueError('Status code out of range.')
         self._status_code = code
         self._status_line = str(status or ('%d Unknown' % code))
-
-    bad_headers = {
-        204: set(('Content-Type',)),
-        304: set(('Allow', 'Content-Encoding', 'Content-Language',
-                  'Content-Length', 'Content-Range', 'Content-Type',
-                  'Content-Md5', 'Last-Modified'))}
 
     @property
     def headerlist(self):
@@ -152,7 +148,7 @@ class BaseResponse:
         out = [
             (name, val.encode('utf8').decode('latin1'))
             for (name, vals) in headers
-                for val in (vals if isinstance(vals, list) else [vals])
+            for val in (vals if isinstance(vals, list) else [vals])
         ]
         if need_ctype:
             out.append(('Content-Type', self.default_content_type))
@@ -218,7 +214,9 @@ class BaseResponse:
         elif not isinstance(value, str):
             raise TypeError('Secret key missing for non-string Cookie.')
 
-        if len(value) > 4096: raise ValueError('Cookie value to long.')
+        if len(value) > 4096:
+            raise ValueError('Cookie value to long.')
+
         self._cookies[name] = value
 
         for key, value in options.items():
@@ -250,6 +248,7 @@ class BaseResponse:
 @ts_props(
     '_status_line', '_status_code',
     '_headers', '_cookies', 'body',
+    store_name='_ts_props'
 )
 class Response(BaseResponse):
     __slots__ = _response_slots
