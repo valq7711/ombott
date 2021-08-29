@@ -96,10 +96,11 @@ class BaseRequest:
         if self._env_get('ombott.request.readonly'):
             raise KeyError('The environ dictionary is read-only.')
 
-        if self.environ[key] in [value]:  # `in` performs 2 OR-gluing tests (`is` OR `==`)
+        env = self.environ
+        if key in env and env[key] in [value]:  # `in` performs 2 OR-gluing tests (`is` OR `==`)
             return
 
-        self.environ[key] = value
+        env[key] = value
         self.emit('env_changed', key, value)
 
     def __delitem__(self, key):

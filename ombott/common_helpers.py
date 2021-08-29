@@ -146,7 +146,7 @@ class NameSpace(types.SimpleNamespace):
     '''
     __getitem__ = types.SimpleNamespace.__getattribute__
     __setitem__ = types.SimpleNamespace.__setattr__
-    get = lambda s, k, d: s.__dict__.get(k, d)
+    get = lambda s, k, d=None: s.__dict__.get(k, d)
     keys = lambda s: s.__dict__.keys()
     values = lambda s: s.__dict__.values()
     items = lambda s: s.__dict__.items()
@@ -157,18 +157,59 @@ class NameSpace(types.SimpleNamespace):
         super().__init__(**kw)
 
 
-class SimpleConfig:
+class _MetaSimpleConfig(type):
+
+    def __init__(cls, name, bases, dct):
+        keys = cls.__get_keys__(bases)
+        if keys:
+            for k in dct.keys():
+                if k.startswith('_'):
+                    continue
+                if k not in keys:
+                    raise KeyError(f'Unexpected key: {k}')
+
+    @staticmethod
+    def __get_keys__(bases):
+        ret_keys = None
+        for bcls in bases:
+            keys = getattr(bcls, '__keys__', None)
+            if not keys:
+                continue
+            if not ret_keys:
+                ret_keys = keys
+            elif keys != ret_keys:
+                raise TypeError('Multiple keys holders detected')
+        return ret_keys
+
+
+class SimpleConfig(metaclass=_MetaSimpleConfig):
+
+    @classmethod
+    def keys_holder(cls, holder_cls):
+        assert cls.__base__ is object
+        if (keys_holder_cls := getattr(holder_cls, '__keys_holder__', None)):
+            raise RuntimeError(f'Keys holder is already registred: {keys_holder_cls}')
+
+        keys = set(holder_cls.keys())
+        for k in keys:
+            if hasattr(cls, k):
+                raise KeyError(f'Bad key `{k}`, reserved keys/attrs are {cls.keys()}')
+        holder_cls.__keys__ = keys
+        holder_cls.__keys_holder__ = holder_cls
+        return holder_cls
 
     def __new__(cls, src_config=None, **kw):
         return cls.get_from(src_config, **kw)
 
     @classmethod
     def keys(cls):
+        if (keys := getattr(cls, '__keys__', None)):
+            return keys.copy()
         return (k for k in cls.__dict__ if not k.startswith('__'))
 
     @classmethod
     def items(cls):
-        return ((k, v) for k, v in cls.__dict__.items() if not k.startswith('__'))
+        return ((k, getattr(cls, k)) for k in cls.keys())
 
     @classmethod
     def get_from(cls, src_config=None, **kw):
@@ -181,7 +222,7 @@ class SimpleConfig:
 
     @classmethod
     def get(cls, k, default=None):
-        return getattr(cls, k, default) if not k.startswith('__') else default
+        return getattr(cls, k) if k in cls.keys() else default
 
 
 # ------------------[ headers parsing] -------------------

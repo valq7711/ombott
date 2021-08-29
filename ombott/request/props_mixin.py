@@ -123,7 +123,7 @@ class PropsMixin:
     def fullpath(self):
         """ Request path including :attr:`script_name` (if present). """
         appname = self._env_get(self.config.app_name_header, '/')
-        return urljoin(self.script_name, self.path[len(appname):])
+        return urljoin(self.script_name, self.path[len(appname):].lstrip('/'))
 
     @property
     def query_string(self):
@@ -153,6 +153,11 @@ class PropsMixin:
     def is_ajax(self):
         ''' Alias for :attr:`is_xhr`. "Ajax" is not the right term. '''
         return self.is_xhr
+
+    @cache_in('environ[ ombott.request.is_json_requested ]', read_only=True)
+    def is_json_requested(self):
+        if (accept := self._env_get('HTTP_ACCEPT')):
+            return accept.startswith('application/json')
 
     @property
     def auth(self):

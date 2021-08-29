@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+    <head>
+        <title>Error: {e.status}</title>
+        <style type="text/css">
+            html {background-color: #eee; font-family: sans-serif;}
+            body {background-color: #fff; border: 1px solid #ddd; padding: 15px; margin: 15px;}
+            pre {background-color: #eee; border: 1px solid #ddd; padding: 5px;}
+        </style>
+    </head>
+    <body>
+        <h1>Error: {e.status}</h1>
+        <p>Sorry, the requested URL <tt>{url}</tt> caused an error:
+        </p>
+        <pre>{e.body}</pre>
+        <h2>Exception:</h2>
+        <pre>{exception}</pre>
+        <h2>Traceback:</h2>
+        <pre>{traceback}</pre>
+    </body>
+</html>

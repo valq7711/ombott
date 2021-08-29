@@ -16,12 +16,14 @@ from .router import HookTypes, RadiRouter
 from .request import Request, errors as request_errors
 from .response import Response, HTTPResponse, HTTPError
 from . import server_adapters
+from . import error_render
 
 __version__ = "0.0.2"
 
 HTTP_METHODS = 'DELETE GET HEAD OPTIONS PATCH POST PUT'.split()
 
 
+@SimpleConfig.keys_holder
 class DefaultConfig(SimpleConfig):
     catchall = True
     debug = False
@@ -102,7 +104,7 @@ class Ombott:
         self._route_hooks = {}
         self.error_handlers = {'404-hooks': {}}
 
-    def setup(self, config):
+    def setup(self, config=None):
         self.config = config = DefaultConfig(config)
         self.request.setup(config)
 
@@ -202,7 +204,9 @@ class Ombott:
 
         def wrapper(handler):
             if code == 404 and rule:
-                route_pattern = self.router.add_hook(rule, handler, hook_type=HookTypes.PARTIAL)
+                route_pattern = self.router.add_hook(
+                    rule, handler, hook_type=HookTypes.PARTIAL
+                )
                 self.error_handlers['404-hooks'][route_pattern] = handler
             else:
                 self.error_handlers[code] = handler
@@ -210,12 +214,15 @@ class Ombott:
         return wrapper
 
     def default_error_handler(self, res):
-        ret = json.dumps(dict(
-            body = res.body,
-            exception = repr(res.exception),
-            traceback = res.traceback
-        ))
-        self.response.headers['Content-Type'] = 'application/json'
+        if self.request.is_json_requested:
+            ret = json.dumps(dict(
+                body = res.body,
+                exception = repr(res.exception),
+                traceback = res.traceback
+            ))
+            self.response.headers['Content-Type'] = 'application/json'
+        else:
+            ret = error_render.render(res, self.request.url, self.config.debug)
         return ret
 
     @staticmethod
