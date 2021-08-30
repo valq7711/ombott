@@ -2,9 +2,9 @@
 import pytest
 from ombott.request import Request
 import threading
-import time
 
-result = {'seq':[]}
+result = {'seq': []}
+
 
 def run_thread(func, *a):
     t = threading.Thread(target=func, args=a)
@@ -23,6 +23,7 @@ def env3():
 def ombott_request():
     return Request()
 
+
 @pytest.fixture
 def init_request(ombott_request):
     def init(env, key, evnt_done=None, evnt_play=None):
@@ -37,9 +38,10 @@ def init_request(ombott_request):
         return ombott_request
     return init
 
+
 def test_thread(init_request, env3, ombott_request):
     e1, e2, e3 = env3
-    assert  init_request(e1, 't1') is ombott_request
+    assert init_request(e1, 't1') is ombott_request
     evnt_done = threading.Event()
     evnt_play = threading.Event()
     t2 = run_thread(init_request, e2, 't2', evnt_done, evnt_play)
