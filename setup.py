@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 import ombott
 
 setup(
-    name="ombott-Val",
+    name="ombott",
     version=ombott.__version__,
     url="https://github.com/valq7711/ombott",
     license=ombott.__license__,
