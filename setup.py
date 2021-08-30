@@ -1,5 +1,4 @@
-from setuptools import setup
-
+from setuptools import setup, find_packages
 import ombott
 
 setup(
@@ -12,11 +11,10 @@ setup(
     maintainer=ombott.__author__,
     maintainer_email="valq7711@gmail.com",
     description="One More BOTTle",
-    packages=['ombott'],
     platforms="any",
     keywords='python webapplication',
     classifiers=[
-        "Development Status :: 1 - Planning",
+        "Development Status :: 3 - Alpha",
         "Environment :: Web Environment",
         "Intended Audience :: Developers",
         "License :: OSI Approved :: MIT License",
@@ -27,4 +25,6 @@ setup(
         "Topic :: Software Development :: Libraries :: Python Modules",
     ],
     python_requires='>=3.8',
+	packages=find_packages('.'),
+	package_data={'ombott': ['error.html']}
 )
