@@ -19,9 +19,10 @@ jobs:
       - name: Install dependencies
         working-directory: ${{ github.workspace }}     
         run: |
+          ls
           python -m pip install --upgrade pip
           pip install pytest
-          pip install ./ombott
+          pip install -e ./ombott
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
       - name: Test with pytest
         working-directory: ${{ github.workspace }}     
