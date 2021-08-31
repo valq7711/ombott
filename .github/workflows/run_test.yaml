@@ -24,4 +24,5 @@ jobs:
       - working-directory: ${{ github.workspace }}     
       - name: Test with pytest
         run: |
+          ls
           pytest
