@@ -26,6 +26,6 @@ setup(
         "Topic :: Software Development :: Libraries :: Python Modules",
     ],
     python_requires='>=3.7',
-	packages=find_packages('.'),
-	package_data={'ombott': ['error.html']}
+    packages=find_packages('.'),
+    package_data={'ombott': ['error.html']}
 )
