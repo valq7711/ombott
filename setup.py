@@ -19,12 +19,13 @@ setup(
         "Intended Audience :: Developers",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
+        "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
         "Topic :: Software Development :: Libraries :: Python Modules",
     ],
-    python_requires='>=3.8',
+    python_requires='>=3.7',
 	packages=find_packages('.'),
 	package_data={'ombott': ['error.html']}
 )
