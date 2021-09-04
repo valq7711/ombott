@@ -97,7 +97,8 @@ class BaseResponse:
         return iter(self.body)
 
     def close(self):
-        if (close := getattr(self.body, 'close', None)):
+        close = getattr(self.body, 'close', None)
+        if close:
             close()
 
     @property
@@ -140,7 +141,8 @@ class BaseResponse:
     def headerlist(self):
         """ WSGI conform list of (header, value) tuples. """
         headers = self._headers.items()
-        if (bad_headers := self.bad_headers.get(self._status_code)):
+        bad_headers = self.bad_headers.get(self._status_code)
+        if bad_headers:
             headers = (h for h in headers if h[0] not in bad_headers)
             need_ctype = False
         else:

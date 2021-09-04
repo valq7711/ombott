@@ -187,7 +187,8 @@ class SimpleConfig(metaclass=_MetaSimpleConfig):
     @classmethod
     def keys_holder(cls, holder_cls):
         assert cls.__base__ is object
-        if (keys_holder_cls := getattr(holder_cls, '__keys_holder__', None)):
+        keys_holder_cls = getattr(holder_cls, '__keys_holder__', None)
+        if keys_holder_cls:
             raise RuntimeError(f'Keys holder is already registred: {keys_holder_cls}')
 
         keys = set(holder_cls.keys())
@@ -203,7 +204,8 @@ class SimpleConfig(metaclass=_MetaSimpleConfig):
 
     @classmethod
     def keys(cls):
-        if (keys := getattr(cls, '__keys__', None)):
+        keys = getattr(cls, '__keys__', None)
+        if keys:
             return keys.copy()
         return (k for k in cls.__dict__ if not k.startswith('__'))
 
@@ -277,7 +279,8 @@ class HeaderDict(DictMixin):
     def append(self, key, value):
         d = self._ts.dict
         value = _hval(value)
-        if (v := d.get(key)) is None:
+        v = d.get(key)
+        if v is None:
             d[key] = value
         elif isinstance(v, list):
             v.append(value)
@@ -326,10 +329,13 @@ class WSGIFileWrapper(object):
     def __init__(self, fp, buffer_size=1024 * 64):
         self.fp, self.buffer_size = fp, buffer_size
         for attr in ('fileno', 'close', 'read', 'readlines', 'tell', 'seek'):
-            if (a := getattr(fp, attr, None)) is not None:
+            a = getattr(fp, attr, None)
+            if a is not None:
                 setattr(self, attr, a)
 
     def __iter__(self):
         buff, read = self.buffer_size, self.read
-        while (part := read(buff)):
+        part = read(buff)
+        while part:
             yield part
+            part = read(buff)

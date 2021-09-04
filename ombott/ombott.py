@@ -232,9 +232,11 @@ class Ombott:
             if status == 405:
                 raise HTTPError(status, body, Allow=extra)
             else:  # not found
-                if (hooks_collected := extra['hooks']):
+                hooks_collected = extra['hooks']
+                if hooks_collected:
                     route_pos, hooks = hooks_collected[-1]
-                    if (partial_hook := hooks[HookTypes.PARTIAL]):
+                    partial_hook = hooks[HookTypes.PARTIAL]
+                    if partial_hook:
                         hook_route = app.request.path[:1 + route_pos]
                         return partial_hook(hook_route, extra['param_values'])
                 raise HTTPError(status, body)
@@ -242,7 +244,8 @@ class Ombott:
         if route_hooks:
             path = app.request.path
             for route_pos, hooks in route_hooks:
-                if (hook := hooks[HookTypes.SIMPLE]):
+                hook = hooks[HookTypes.SIMPLE]
+                if hook:
                     hook(path[:1 + route_pos])
         return route(**kwargs)
 
@@ -334,8 +337,9 @@ class Ombott:
             # Handle Iterables. We peek into them to detect their inner type.
             try:
                 iout = iter(out)
-                while not (first := next(iout)):
-                    pass
+                first = next(iout)
+                while not first:
+                    first = next(iout)
             except StopIteration:
                 out = ''; continue                               # -----------------^
             except HTTPResponse as rs:
@@ -356,7 +360,8 @@ class Ombott:
             else:
                 out = HTTPError(500, f'Unsupported response type: {type(first)}')
                 continue                                         # -----------------^
-            if (close := getattr(out, 'close', None)):
+            close = getattr(out, 'close', None)
+            if close:
                 new_iter = _closeiter(new_iter, close)
             return new_iter
 
@@ -364,8 +369,10 @@ class Ombott:
         config: DefaultConfig = self.config
         response = self.response
 
-        if (domain_map := config.domain_map):
-            if (app_name := domain_map(environ.get('HTTP_X_FORWARDED_HOST') or environ.get('HTTP_HOST'))):
+        domain_map = config.domain_map
+        if domain_map:
+            app_name = domain_map(environ.get('HTTP_X_FORWARDED_HOST') or environ.get('HTTP_HOST'))
+            if app_name:
                 environ[config.app_name_header] = '/' + app_name
                 environ["PATH_INFO"] = '/' + app_name + environ["PATH_INFO"]
 
@@ -376,7 +383,8 @@ class Ombott:
                 response._status_code in {100, 101, 204, 304}
                 or environ['REQUEST_METHOD'] == 'HEAD'
             ):
-                if (close := getattr(out, 'close', None)):
+                close = getattr(out, 'close', None)
+                if close:
                     close()
                 out = []
             start_response(response._status_line, response.headerlist)

@@ -156,7 +156,8 @@ class PropsMixin:
 
     @cache_in('environ[ ombott.request.is_json_requested ]', read_only=True)
     def is_json_requested(self):
-        if (accept := self._env_get('HTTP_ACCEPT')):
+        accept = self._env_get('HTTP_ACCEPT')
+        if accept:
             return accept.startswith('application/json')
 
     @property

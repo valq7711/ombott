@@ -1,8 +1,9 @@
-
 import re
+
 
 class _RouteFilterExhaust:
     __slots__ = ('value', 'move_len', 'selector')
+
     def __init__(self, value, move_len, selector = None):
         self.value = value
         self.move_len = move_len
@@ -36,24 +37,24 @@ class FilterFactory:
     _filter_cache = {}
 
     @classmethod
-    def make_filter(cls, filter:str, args:str):
+    def make_filter(cls, filter: str, args: str):
         if not filter:
             return None
         fkey = f'{filter}({args})'
 
-        if (handler := cls._filter_cache.get(fkey)):
+        handler = cls._filter_cache.get(fkey)
+        if handler:
             return handler
 
         mask, f_in, f_out = cls.filters[filter](args)
         mask = re.compile(mask)
         if f_in:
-            if (
-                (code := getattr(f_in, '__code__', None))
-                and code.co_argcount != 1
-            ):  # 0 means f_in(*args)
+            code = getattr(f_in, '__code__', None)
+            if code and code.co_argcount != 1:  # 0 means f_in(*args)
                 def handler(param):
                     selector = None
-                    if not (tmp := mask.match(param)):
+                    tmp = mask.match(param)
+                    if not tmp:
                         return None, 0, selector
                     ret = f_in(tmp.group(), tmp)
                     if isinstance(ret, _RouteFilterExhaust):
@@ -63,14 +64,15 @@ class FilterFactory:
                     return ret, pos, selector
             else:
                 def handler(param):
-                    if not (tmp := mask.match(param)):
+                    tmp = mask.match(param)
+                    if not tmp:
                         return None, 0, None
                     return f_in(tmp.group()), tmp.end(), None
         else:
             def handler(param):
-                if not (tmp := mask.match(param)):
+                tmp = mask.match(param)
+                if not tmp:
                     return None, 0, None
                 return tmp.group(), tmp.end(), None
         cls._filter_cache[fkey] = handler
         return handler
-

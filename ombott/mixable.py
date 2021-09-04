@@ -5,7 +5,8 @@ class MixableMeta(type):
 
     def __new__(cls, name, bases, dct):
         mixins = []
-        if (mixins_set := dct.get('_as_mixins')):
+        mixins_set = dct.get('_as_mixins')
+        if mixins_set:
             bases_ = []
             for m in bases:
                 if m in mixins_set:

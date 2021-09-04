@@ -1,4 +1,3 @@
-import re
 from enum import IntEnum
 from .radidict import RadiDict, DATA, HOOKS
 from .filter_factory import FilterFactory
@@ -23,10 +22,13 @@ class RouteMethod:
     def get_undecorated_callback(cls, func):
         ''' Return the callback. If the callback is a decorated function, try to
             recover the original function. '''
-        if not (func := getattr(func, '__func__', None)):
+        func = getattr(func, '__func__', None)
+        if not func:
             return func
-        while (closure := getattr(func, '__closure__', None)):
+        closure = getattr(func, '__closure__', None)
+        while closure:
             func = closure[0].cell_contents
+            closure = getattr(func, '__closure__', None)
         return func
 
     def remove(self):
@@ -98,7 +100,8 @@ class Route:
         if isinstance(method, str):
             method = [method]
         for name in method:
-            if (meth := self._methods.get(name)):
+            meth = self._methods.get(name)
+            if meth:
                 return meth
         raise RouteMethodError()
 
@@ -147,7 +150,7 @@ class HookTypes(IntEnum):
 class RouteKey(dict):
     @staticmethod
     def check_args(args):
-        if len(args)>1:
+        if len(args) > 1:
             raise TypeError('Expected `rule` or `pattern`, not both')
 
     def __init__(self, rule=None, *, pattern=None):
@@ -311,10 +314,10 @@ class RadiRouter:
         if not mismatch:
             return node[DATA] if not get_hooks else node[HOOKS]
 
-
     def _add(self, rule, methods, handler, name=None, *, meta=None, overwrite=False):
         route = Route(rule)
-        if (route_ := self._match(route.pattern, route.filters)):
+        route_ = self._match(route.pattern, route.filters)
+        if route_:
             route = route_
         else:
             self.radidict.add(route.pattern, route, route.params_signature())

@@ -65,7 +65,8 @@ class SymStream:
         i = self.pos
         s = self.s
         ret = None
-        if (tmp := re.match(rex_str, s[i:])):
+        tmp = re.match(rex_str, s[i:])
+        if tmp:
             j = i + tmp.end()
             ret = s[i:j] if group is None else tmp.group(group)
             self._set_pos(j)

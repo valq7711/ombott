@@ -131,7 +131,8 @@ class BodyMixin:
 
     @property
     def body(self):
-        (ret := self._body).seek(0)
+        ret = self._body
+        ret.seek(0)
         return ret
 
     @cache_in('environ[ ombott.request.query ]', read_only=True)
@@ -141,7 +142,8 @@ class BodyMixin:
             not to be confused with "URL wildcards" as they are provided by the
             :class:`Router`. '''
         ret = FormsDict()
-        if (qs := self._env_get('QUERY_STRING', '')):
+        qs = self._env_get('QUERY_STRING', '')
+        if qs:
             parse_qsl(qs, setitem = ret.__setitem__)
         self.environ['ombott.request.get'] = ret
         return ret

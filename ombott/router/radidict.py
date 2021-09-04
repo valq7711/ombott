@@ -56,7 +56,8 @@ class RadiDict:
         self.root = self._make_node(key = '/')
 
     def _token_pos(self, s):
-        return ret if (ret := s.find(self.param_token)) >= 0 else len(s)
+        ret = s.find(self.param_token)
+        return ret if ret >= 0 else len(s)
 
     def _make_node(self, key, *,
                    idx = None, data = None, weight = 0,
@@ -272,7 +273,8 @@ class RadiDict:
             else:
                 break  # not found - break while
 
-            key = (pnode := pnode[kidx + OFFSET])[KEY]
+            pnode = pnode[kidx + OFFSET]
+            key = pnode[KEY]
             key_end = i + len(key)
             stack.append(pnode)
             if key == route[i: key_end]:
@@ -374,7 +376,8 @@ class RadiDict:
 
         pnode = self.root
         params = []
-        hooks = [[0, hooks]] if (hooks := pnode[HOOKS]) else []
+        hooks = pnode[HOOKS]
+        hooks = [[0, hooks]] if hooks else []
         look_back = []
         do_look_back = False
         selector = None
@@ -400,7 +403,8 @@ class RadiDict:
                     # maybe token or look_back
                     if c == TOKEN:
                         token_node = pnode[-1]
-                        if (filter := token_node[FILTER]):
+                        filter = token_node[FILTER]
+                        if filter:
                             param_value, j, selector = filter(route[i:])
                             j += i
                         else:
@@ -415,7 +419,8 @@ class RadiDict:
                             params.append(param_value)
                             i = j
                             pnode = token_node
-                            if (h := pnode[HOOKS]):
+                            h = pnode[HOOKS]
+                            if h:
                                 hooks.append([i, h])
                             if selector is not None:
                                 look_back.append(
@@ -436,11 +441,13 @@ class RadiDict:
                     look_back.append(
                         [route, pnode, i, L, params[:], hooks[:], True]
                     )
-                key = (pnode := pnode[OFFSET + kidx])[KEY]
+                pnode = pnode[OFFSET + kidx]
+                key = pnode[KEY]
                 key_end = i + len(key)
                 if key == route[i: key_end]:
                     i = key_end
-                    if (h := pnode[HOOKS]):
+                    h = pnode[HOOKS]
+                    if h:
                         hooks.append([i, h])
                 else:
                     break  # while

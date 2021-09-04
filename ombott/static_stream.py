@@ -37,12 +37,16 @@ def get_first_range(header, maxlen=0):
     except ValueError:
         pass
 
+
 def _file_iter_range(fp, offset, bytes_len, maxread=1024 * 1024):
     ''' Yield chunks from a range in a file. No chunk is bigger than maxread.'''
     fp.seek(offset)
-    while bytes_len > 0 and (part := fp.read(min(bytes_len, maxread))):
+    part = fp.read(min(bytes_len, maxread))
+    while bytes_len > 0 and part:
         bytes_len -= len(part)
         yield part
+        part = fp.read(min(bytes_len, maxread))
+
 
 def static_file(filename, root, mimetype='auto', download=False, charset='UTF-8'):
     """ Open a file in a safe way and return :exc:`HTTPResponse` with status
@@ -69,7 +73,6 @@ def static_file(filename, root, mimetype='auto', download=False, charset='UTF-8'
     filename = os_path.abspath(os_path.join(root, filename.strip('/\\')))
     headers = dict()
     env_get = request.environ.get
-
 
     if not filename.startswith(root):
         return HTTPError(403, "Access denied.")

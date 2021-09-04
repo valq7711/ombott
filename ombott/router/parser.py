@@ -3,6 +3,7 @@ import re
 from .sym_stream import SymStream
 from .errors import RouteSyntaxError
 
+
 class Parser:
     param_delimiters = '{<'
     param_delimiters_map = {
@@ -43,7 +44,8 @@ class Parser:
                 # path needs special processing
                 if filter == 'path':
                     tail = S.rest()
-                    token_pos = tmp.end() if (tmp := re.match(fr'[^{param_tokens}]+', tail)) else len(tail)
+                    tmp = re.match(fr'[^{param_tokens}]+', tail)
+                    token_pos = tmp.end() if tmp else len(tail)
                     filter_args = tail[: token_pos]
             # static logic
             else:

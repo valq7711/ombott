@@ -16,8 +16,10 @@ urlunquote = partial(_urlunquote, encoding='latin1')
 def cache_in(attr, key=None, read_only=False):
     # attr = 'environ[ PATH_INFO ]'
     re_attr_key = re.compile(r'^(.+?)\[\s*([^\[\]]+?)\s*\]$')
-    if not key and (attr_key := re_attr_key.match(attr)):
-        attr, key = attr_key.groups()
+    if not key:
+        attr_key = re_attr_key.match(attr)
+        if attr_key:
+            attr, key = attr_key.groups()
 
     def wrapper(getter):
 
@@ -79,7 +81,8 @@ def parse_qsl(qs, *, append: callable = None, setitem: callable = None):
         _lists = dict()
 
         def add(k, v):
-            if (vlist := _lists.get(k)):
+            vlist = _lists.get(k)
+            if vlist:
                 vlist.append(v)
             elif k in _seen:
                 tmp = _lists[k] = [_seen[k], v]
