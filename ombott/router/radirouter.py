@@ -4,6 +4,7 @@ from .filter_factory import FilterFactory
 from .errors import RouteBuildError, RouteMethodError
 from .parser import Parser
 
+
 ###############################################################################
 # Routing ######################################################################
 ###############################################################################
@@ -47,7 +48,10 @@ class RouteMethod:
 
 
 class Route:
-    __slots__ = ('rule', '_methods', 'pattern', 'params', 'filters')
+    __slots__ = (
+        'rule', '_methods', 'pattern', 'params', 'filters',
+        'pattern_out', 'filters_out'
+    )
 
     parser = Parser()
 
@@ -60,10 +64,63 @@ class Route:
         self.rule = rule
         #: The HTTP methods dict like {'GET': {'handler': <callable>, 'meta': <any>} }
         self._methods = dict()
-        pattern, params, filters = self.__class__.parse_rule(rule)
+        pattern, params, filters, pattern_out, filters_out = self.__class__.parse_rule(rule)
         self.pattern = pattern  # never starts from '/'
         self.params = params
         self.filters = filters
+
+        self.pattern_out = pattern_out
+        self.filters_out = filters_out
+
+    def url(self, *args, **kw):
+
+        params = self.params
+        if not params:
+            return self.pattern_out
+
+        filters = self.filters
+        filters_out = self.filters_out
+        anon_prefix = self.anon_prefix
+        pattern_out = self.pattern_out
+
+        ret = []
+        pidx = 0
+        args_idx = 0
+        cidx = 0
+        clen = 0
+        end = 0
+        for c in pattern_out:
+            if c != '\r':
+                clen += 1
+                continue
+            end = cidx
+            if clen:
+                end += clen
+                clen = 0
+                ret.append(pattern_out[cidx:end])
+            cidx = end + 1
+
+            pname = params[pidx]
+            f_out = filters_out[pidx]
+            f_in = filters[pidx]
+            pidx += 1
+
+            if pname.startswith(anon_prefix):
+                prt = args[args_idx]
+                args_idx += 1
+            else:
+                prt = kw[pname]
+            if f_out:
+                prt = f_out(prt)
+            if f_in:
+                assert f_in(prt)[1]  # `pos` must be > 0 if match
+            ret.append(prt)
+
+        if clen:
+            end = cidx + clen
+            ret.append(pattern_out[cidx:end])
+
+        return ''.join(ret)
 
     def _set_methods(self, methods, handler, meta=None):
         for meth in methods:
@@ -124,22 +181,26 @@ class Route:
     def parse_rule(cls, rule):
         assert rule[0] == '/'
         rule = rule[1:]
-        ret = []
+        pattern = []
+        pattern_out = []  # to build url (pattern without filter selectors)
         params = []
         filters = []
+        filters_out = []
         anon_counter = 0
         for part, param, filter, filter_args, filter_selector in cls.parser.iter_parse(rule):
+            filter_selector = filter_selector or ''
             if not part:  # it is param or/and filter
                 part = '\r'
                 if not param:
                     param = f'{cls.anon_prefix}{anon_counter}'
                     anon_counter += 1
                 params.append(param)
-                filters.append(cls.make_filter(filter, filter_args))
-                if filter_selector:
-                    part += filter_selector
-            ret.append(part)
-        return ''.join(ret), params, filters
+                h, f_out = cls.make_filter(filter, filter_args)
+                filters.append(h)
+                filters_out.append(f_out)
+            pattern.append(part + filter_selector)
+            pattern_out.append(part)
+        return ''.join(pattern), params, filters, ''.join(pattern_out), filters_out
 
 
 class HookTypes(IntEnum):
@@ -275,7 +336,7 @@ class RadiRouter:
         return route_hooks
 
     def add_hook(self, rule, *args, **kwargs):
-        route_pattern, params, filters = self.parse_rule(rule)
+        route_pattern, params, filters, _, _ = self.parse_rule(rule)
         route_hooks = self._match(route_pattern = route_pattern, get_hooks = True)
         new_route_hooks = self.hook_installer(route_hooks, *args, **kwargs)
         if new_route_hooks is not None and new_route_hooks is not route_hooks:
@@ -285,7 +346,7 @@ class RadiRouter:
         return route_pattern
 
     def get_hook(self, rule):
-        route_pattern, params, filters = self.parse_rule(rule)
+        route_pattern, params, filters, _, _ = self.parse_rule(rule)
         return self.hooks[route_pattern]
 
     def remove_hook(self, rule):
@@ -304,7 +365,7 @@ class RadiRouter:
 
         if route_pattern is None:
             if filters is None:
-                route_pattern, params, filters = self.parse_rule(rule)
+                route_pattern, params, filters, _, _ = self.parse_rule(rule)
             else:
                 # if `filters` is passed, but not `route_pattern`, then rule is pattern
                 route_pattern = rule

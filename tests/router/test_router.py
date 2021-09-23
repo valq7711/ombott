@@ -23,6 +23,7 @@ route_meth_handler_path = [
     ('/path1/{pth:path()}end', 'GET', dict(pth='this/path/to-'), '/path1/this/path/to-end'),
 ]
 
+
 def expand_params():
     ret = []
     for it in route_meth_handler_path:
@@ -35,6 +36,7 @@ def expand_params():
         for p in path:
             ret.append([name, rule, meth, handler, p])
     return ret
+
 
 def make_router():
     router = RadiRouter()
@@ -64,9 +66,11 @@ def exist_rule_paths():
 def fresh_router():
     return make_router()
 
+
 @pytest.fixture(scope='class')
 def router():
     return make_router()
+
 
 @pytest.fixture
 def routes():
@@ -118,7 +122,6 @@ class TestRemove:
             assert router[name] is None
         route_meth, err = router.resolve(path, 'GET')
         assert err[0] == 404
-
 
 
 def test_remove_method(fresh_router: RadiRouter):

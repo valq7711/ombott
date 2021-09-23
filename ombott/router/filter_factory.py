@@ -39,12 +39,12 @@ class FilterFactory:
     @classmethod
     def make_filter(cls, filter: str, args: str):
         if not filter:
-            return None
+            return None, None
         fkey = f'{filter}({args})'
 
-        handler = cls._filter_cache.get(fkey)
-        if handler:
-            return handler
+        handler_f_out = cls._filter_cache.get(fkey)
+        if handler_f_out:
+            return handler_f_out
 
         mask, f_in, f_out = cls.filters[filter](args)
         mask = re.compile(mask)
@@ -74,5 +74,5 @@ class FilterFactory:
                 if not tmp:
                     return None, 0, None
                 return tmp.group(), tmp.end(), None
-        cls._filter_cache[fkey] = handler
-        return handler
+        cls._filter_cache[fkey] = [handler, f_out]
+        return handler, f_out
