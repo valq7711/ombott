@@ -18,7 +18,7 @@ from .response import Response, HTTPResponse, HTTPError
 from . import server_adapters
 from . import error_render
 
-__version__ = "0.0.5"
+__version__ = "0.0.6"
 
 HTTP_METHODS = 'DELETE GET HEAD OPTIONS PATCH POST PUT'.split()
 
@@ -121,7 +121,7 @@ class Ombott:
         return (end_point, error404_405)
 
     def add_route(self, rule, method, handler, name=None, *, overwrite=False):
-        self.router.add(rule, method, handler, name, overwrite=overwrite)
+        return self.router.add(rule, method, handler, name, overwrite=overwrite)
 
     def remove_route(self, rule=None, *, route_pattern=None, name=None):
         self.router.remove(rule, route_pattern=route_pattern, name=name)
