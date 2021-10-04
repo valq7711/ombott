@@ -11,6 +11,7 @@ class RequestConfig(SimpleConfig):
     errors_map = {}
     max_body_size = None
     max_memfile_size = 100 * 1024
+    allow_x_script_name = False
 
 
 class BaseRequest:

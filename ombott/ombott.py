@@ -18,7 +18,7 @@ from .response import Response, HTTPResponse, HTTPError
 from . import server_adapters
 from . import error_render
 
-__version__ = "0.0.6"
+__version__ = "0.0.7"
 
 HTTP_METHODS = 'DELETE GET HEAD OPTIONS PATCH POST PUT'.split()
 
@@ -38,6 +38,7 @@ class DefaultConfig(SimpleConfig):
     }
     max_body_size = None
     max_memfile_size = 100 * 1024
+    allow_x_script_name = False
 
 
 class _closeiter:

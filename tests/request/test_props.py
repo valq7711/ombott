@@ -1,6 +1,6 @@
 
 import pytest
-from  ombott.request import Request
+from ombott.request import Request
 import wsgiref.util
 
 
@@ -27,6 +27,7 @@ def env_fix(request):
     upd = getattr(request, 'param', {})
     ret = {
         'SCRIPT_NAME': 'scrpt_name',
+        'HTTP_X_SCRIPT_NAME': 'x_scrpt_name',
         'REQUEST_METHOD': 'GET',
         'PATH_INFO': '/a/bb/ccc',
         'QUERY_STRING': 'a=2&b=c&c=44',
@@ -90,3 +91,47 @@ def test_headers(ombott_request: Request, wsgi_env, wsgi_env_cpy, req_attr, expe
 )
 def test_app_name_header(ombott_request: Request, expect_fullpath):
     assert ombott_request.fullpath == expect_fullpath
+
+
+@pytest.mark.parametrize(
+    'ombott_request, env_fix, expect_fullpath',
+    [
+        (
+            {'app_name_header': 'HTTP_X_APP_NAME'},
+            {
+                'PATH_INFO': '/some_app/a/bb/ccc',
+                'HTTP_X_APP_NAME': '/some_app'
+            },
+            '/scrpt_name/a/bb/ccc'
+        ),
+        (
+            {
+                'app_name_header': 'HTTP_X_APP_NAME',
+                'allow_x_script_name': True
+            },
+            {
+                'PATH_INFO': '/some_app/a/bb/ccc',
+                'HTTP_X_APP_NAME': '/some_app',
+                'SCRIPT_NAME': ''
+            },
+            '/x_scrpt_name/a/bb/ccc'
+        ),
+        (
+            {
+                'app_name_header': 'HTTP_X_APP_NAME',
+                'allow_x_script_name': False  # default
+            },
+            {
+                'PATH_INFO': '/some_app/a/bb/ccc',
+                'HTTP_X_APP_NAME': '/some_app',
+                'SCRIPT_NAME': ''
+            },
+            '/a/bb/ccc'
+        )
+    ],
+    indirect=['ombott_request', 'env_fix']
+)
+def test_app_name_header(ombott_request: Request, expect_fullpath):
+    assert ombott_request.fullpath == expect_fullpath
+    assert ombott_request.headers['x-script-name'] == 'x_scrpt_name'
+

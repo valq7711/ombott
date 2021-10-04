@@ -138,8 +138,10 @@ class PropsMixin:
             called. This script path is returned with leading and tailing
             slashes. '''
         env_get = self._env_get
-        script_name = env_get('SCRIPT_NAME', env_get('HTTP_X_SCRIPT_NAME', '')).strip('/')
-        return '/' + script_name + '/' if script_name else '/'
+        script_name = env_get('SCRIPT_NAME')
+        if not script_name and self.config.allow_x_script_name:
+            script_name = env_get('HTTP_X_SCRIPT_NAME')
+        return '/' + script_name.strip('/') + '/' if script_name else '/'
 
     @property
     def is_xhr(self):
