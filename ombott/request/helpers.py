@@ -221,7 +221,7 @@ class WSGIHeaderDict(DictMixin):
 
 class FileUpload:
 
-    __slots__ = ('file', 'name', 'raw_filename', 'headers')
+    __slots__ = ('file', 'name', 'raw_filename', 'headers', '__dict__')
 
     content_type = HeaderProperty('Content-Type')
     content_length = HeaderProperty('Content-Length', reader=int, default=-1)
