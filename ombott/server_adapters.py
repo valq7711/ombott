@@ -237,8 +237,8 @@ class EventletServer(ServerAdapter):
 class RocketServer(ServerAdapter):
     """ Untested. """
     def run(self, handler):
-        from rocket import Rocket
-        server = Rocket((self.host, self.port), 'wsgi', {'wsgi_app': handler})
+        from rocket3 import Rocket3
+        server = Rocket3((self.host, self.port), 'wsgi', {'wsgi_app': handler})
         server.start()
 
 
