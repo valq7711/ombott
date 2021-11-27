@@ -281,14 +281,14 @@ class RadiRouter:
             else:
                 route_pattern = route.pattern
         elif name is not None:
-            route = self.named_routes[name]
+            route = self.named_routes.pop(name)
             route_pattern = route.pattern
 
         self.radidict.remove(route_pattern)
         if route:
             del self.routes[route.pattern]
         else:
-            if route_pattern[-1] == '*':
+            if route_pattern.endswith('*'):
                 route_pattern = route_pattern[:-1]
                 patterns_to_del = [
                     pattern for pattern in self.routes
