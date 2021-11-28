@@ -126,7 +126,8 @@ class RadiDict:
 
     def _try_merge(self, pnode):
         if (
-            pnode[DATA] or pnode[HOOKS]
+            pnode is self.root
+            or pnode[DATA] or pnode[HOOKS]
             or not pnode[IDX] or len(pnode[IDX]) != 1
             or pnode[KEY] == self.param_token
             or pnode[IDX] == self.param_token
