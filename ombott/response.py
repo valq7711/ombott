@@ -1,7 +1,9 @@
 from datetime import date as datedate, datetime, timedelta
+import email.utils
 import http.client as httplib
 from http.cookies import SimpleCookie
 import time
+import calendar
 
 from .common_helpers import (
     ts_props,
@@ -14,17 +16,24 @@ from .errors import OmbottException
 
 
 def http_date(value):
-    if isinstance(value, (datedate, datetime)):
+    if isinstance(value, str):
+        return value
+    if isinstance(value, datetime):
+        # aware datetime.datetime is converted to UTC time
+        # naive datetime.datetime is treated as UTC time
         value = value.utctimetuple()
-    elif isinstance(value, (int, float)):
-        value = time.gmtime(value)
-    if not isinstance(value, str):
-        value = time.strftime("%a, %d %b %Y %H:%M:%S GMT", value)
-    return value
+    elif isinstance(value, datedate):
+        # datetime.date is naive, and is treated as UTC time
+        value = value.timetuple()
+    if not isinstance(value, (int, float)):
+        # convert struct_time in UTC to UNIX timestamp
+        value = calendar.timegm(value)
+    return email.utils.formatdate(value, usegmt=True)
 
 
 _response_slots = (
-    '_status_line', '_status_code', 'headers', '_headers', '_cookies', 'body', '_ts_props'
+    '_status_line', '_status_code', 'headers', '_headers',
+    '_cookies', 'body', '_ts_props'
 )
 
 
@@ -166,7 +175,8 @@ class BaseResponse:
     expires = HeaderProperty(
         'Expires',
         reader=lambda x: datetime.utcfromtimestamp(parse_date(x)),
-        writer=lambda x: http_date(x))
+        writer=lambda x: http_date(x)
+    )
 
     @property
     def charset(self, default='UTF-8'):
@@ -226,11 +236,7 @@ class BaseResponse:
                 if isinstance(value, timedelta):
                     value = value.seconds + value.days * 24 * 3600
             if key == 'expires':
-                if isinstance(value, (datedate, datetime)):
-                    value = value.timetuple()
-                elif isinstance(value, (int, float)):
-                    value = time.gmtime(value)
-                value = time.strftime("%a, %d %b %Y %H:%M:%S GMT", value)
+                value = http_date(value)
             self._cookies[name][key.replace('_', '-')] = value
 
     def delete_cookie(self, key, **kwargs):

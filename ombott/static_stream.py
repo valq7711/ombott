@@ -2,6 +2,8 @@ import os
 import mimetypes
 import time
 
+import email.utils
+
 from .common_helpers import parse_date
 from .response import HTTPResponse, HTTPError
 from .ombott import Globals
@@ -97,19 +99,13 @@ def static_file(filename, root, mimetype='auto', download=False, charset='UTF-8'
 
     stats = os.stat(filename)
     headers['Content-Length'] = clen = stats.st_size
-    headers['Last-Modified'] = time.strftime(
-        "%a, %d %b %Y %H:%M:%S GMT",
-        time.gmtime(stats.st_mtime)
-    )
+    headers['Last-Modified'] = email.utils.formatdate(stats.st_mtime, usegmt=True)
 
     ims = env_get('HTTP_IF_MODIFIED_SINCE')
     if ims:
         ims = parse_date(ims.split(";")[0].strip())
     if ims is not None and ims >= int(stats.st_mtime):
-        headers['Date'] = time.strftime(
-            "%a, %d %b %Y %H:%M:%S GMT",
-            time.gmtime()
-        )
+        headers['Date'] = email.utils.formatdate(time.time(), usegmt=True)
         return HTTPResponse(status=304, **headers)
 
     body = '' if request.method == 'HEAD' else open(filename, 'rb')
