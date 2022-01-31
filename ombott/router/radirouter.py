@@ -131,17 +131,17 @@ class Route:
             method = [method]
         self._set_methods(method, handler, meta)
 
-    def _raise_if_registred(self, method):
+    def _raise_if_registred(self, method, ctrl):
         registred = set(self._methods) & set(method)
         if registred:
             raise RouteMethodError(
-                f'Handler is already registred for `{list(registred)}`'
+                f'Controller `{ctrl.__qualname__}`: `{self.rule}` is already registred for `{list(registred)}`'
             )
 
     def add_method(self, method, *a, **kw):
         if isinstance(method, str):
             method = [method]
-        self._raise_if_registred(method)
+        self._raise_if_registred(method, a[0])
         self._set_methods(method, *a, **kw)
 
     def remove_method(self, method):
