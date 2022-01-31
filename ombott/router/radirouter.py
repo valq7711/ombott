@@ -135,7 +135,7 @@ class Route:
         registred = set(self._methods) & set(method)
         if registred:
             raise RouteMethodError(
-                f'Controller `{ctrl.__qualname__}`: `{self.rule}` is already registred for `{list(registred)}`'
+                f'Controller `{ctrl.__qualname__}`: `{self.rule}` is already registered for `{list(registred)}`'
             )
 
     def add_method(self, method, *a, **kw):
