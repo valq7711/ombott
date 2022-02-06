@@ -189,7 +189,7 @@ class SimpleConfig(metaclass=_MetaSimpleConfig):
         assert cls.__base__ is object
         keys_holder_cls = getattr(holder_cls, '__keys_holder__', None)
         if keys_holder_cls:
-            raise RuntimeError(f'Keys holder is already registred: {keys_holder_cls}')
+            raise RuntimeError(f'Keys holder is already registered: {keys_holder_cls}')
 
         keys = set(holder_cls.keys())
         for k in keys:

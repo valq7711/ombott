@@ -131,17 +131,17 @@ class Route:
             method = [method]
         self._set_methods(method, handler, meta)
 
-    def _raise_if_registred(self, method):
-        registred = set(self._methods) & set(method)
-        if registred:
+    def _raise_if_registered(self, method, ctrl):
+        registered = set(self._methods) & set(method)
+        if registered:
             raise RouteMethodError(
-                f'Handler is already registred for `{list(registred)}`'
+                f'Controller `{ctrl.__qualname__}`: `{self.rule}` is already registered for `{list(registered)}`'
             )
 
     def add_method(self, method, *a, **kw):
         if isinstance(method, str):
             method = [method]
-        self._raise_if_registred(method)
+        self._raise_if_registered(method, a[0])
         self._set_methods(method, *a, **kw)
 
     def remove_method(self, method):
@@ -390,8 +390,8 @@ class RadiRouter:
             route.add_method(methods, handler, meta)
 
         if name:
-            registred = self.named_routes.get(name)
-            if not overwrite and registred and registred and registred is not route:
+            registered = self.named_routes.get(name)
+            if not overwrite and registered and registered and registered is not route:
                 raise RouteBuildError(f'Can`t register route, name `{name}` is already used')
             self.named_routes[name] = route
         return route
