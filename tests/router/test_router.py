@@ -1,5 +1,6 @@
 import pytest
 from ombott.router import RadiRouter, Route
+from ombott.router.errors import RouteMethodError
 
 
 route_meth_handler_path = [
@@ -102,6 +103,36 @@ class TestRoutes:
                 assert params == handler
             if name:
                 assert router[name][meth] is route_meth
+
+
+def test_overwrite_error():
+    router = RadiRouter()
+    route = '/foo/bar'
+
+    def h():
+        pass
+
+    router.add(route, ['GET', 'POST'], h)
+    with pytest.raises(RouteMethodError) as exc_info:
+        router.add(route, 'GET', h)
+    assert route in str(exc_info.value)
+    assert 'already registered' in str(exc_info.value)
+
+
+def test_str_repr():
+    router = RadiRouter()
+    route = '/foo/bar'
+
+    def h():
+        pass
+
+    router.add(route, ['GET', 'POST'], h)
+    end_point, err404_405 = router.resolve(route, 'GET')
+    route_meth, *_ = end_point
+    assert h.__qualname__ in str(route_meth)
+    assert 'GET' in str(route_meth)
+    assert h.__qualname__ in repr(route_meth)
+    assert route in repr(route_meth)
 
 
 class TestRemove:

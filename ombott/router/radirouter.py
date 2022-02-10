@@ -5,43 +5,31 @@ from .errors import RouteBuildError, RouteMethodError
 from .parser import Parser
 
 
-###############################################################################
-# Routing ######################################################################
-###############################################################################
-
-
 class RouteMethod:
     __slots__ = ('route', 'name', 'handler', 'meta')
 
-    def __init__(self, route, name, handler, meta = None):
+    def __init__(self, route, name, handler, meta=None):
         self.route = route
         self.name = name
         self.handler = handler
         self.meta = meta
 
-    @classmethod
-    def get_undecorated_callback(cls, func):
-        ''' Return the callback. If the callback is a decorated function, try to
-            recover the original function. '''
-        func = getattr(func, '__func__', None)
-        if not func:
-            return func
-        closure = getattr(func, '__closure__', None)
-        while closure:
-            func = closure[0].cell_contents
-            closure = getattr(func, '__closure__', None)
-        return func
-
     def remove(self):
         self.route.remove_method(self.name)
 
+    @classmethod
+    def get_func_fullname(cls, func):
+        return f'{func.__module__}.{func.__qualname__}'
+
+    @property
+    def handler_fullname(self):
+        return self.get_func_fullname(self.handler)
+
     def __str__(self):
-        cb = self.get_undecorated_callback(self.handler)
-        return '{}: {}'.format(self.name, cb)
+        return '{}: {}'.format(self.name, self.handler)
 
     def __repr__(self):
-        cb = self.get_undecorated_callback(self.handler)
-        return '<{}:{} {}>'.format(self.route.rule, self.name, cb)
+        return '<{}:{} {}>'.format(self.route.rule, self.name, self.handler)
 
     def __call__(self, *a, **kw):
         return self.handler(*a, **kw)
@@ -131,18 +119,25 @@ class Route:
             method = [method]
         self._set_methods(method, handler, meta)
 
-    def _raise_if_registered(self, method, ctrl):
+    def _raise_if_registered(self, method, candidate):
         registered = set(self._methods) & set(method)
         if registered:
+            registered_fullnames = {
+                m: self._methods[m].handler_fullname
+                for m in registered
+            }
+            candidate_fullname = RouteMethod.get_func_fullname(candidate)
             raise RouteMethodError(
-                f'Controller `{ctrl.__qualname__}`: `{self.rule}` is already registered for `{list(registered)}`'
+                f'Trying to register `{candidate_fullname}` '
+                f'as handler for route methods `{self.rule}: {method}`, '
+                f'but there are already registered: `{registered_fullnames}`'
             )
 
-    def add_method(self, method, *a, **kw):
+    def add_method(self, method, handler, meta=None):
         if isinstance(method, str):
             method = [method]
-        self._raise_if_registered(method, a[0])
-        self._set_methods(method, *a, **kw)
+        self._raise_if_registered(method, handler)
+        self._set_methods(method, handler, meta)
 
     def remove_method(self, method):
         if isinstance(method, str):
@@ -360,7 +355,8 @@ class RadiRouter:
         _match('/foo/:bar:re([^/]+)/baz') - will parse route and retrieve filters
         _match( 'foo/\r/baz', [make_filter('re', '[^/]+')] ) - the same as above
         _match(pattern, filters)  - is the same as -  _match(filters, route_pattern = pattern)
-        _match(route_pattern = '/foo/\r/baz') - without filter comparision - used for remove, hook installation and general info
+        _match(route_pattern = '/foo/\r/baz') - without filter comparision
+            - used for removing, hook installation and general info
         '''
 
         if route_pattern is None:
@@ -391,7 +387,7 @@ class RadiRouter:
 
         if name:
             registered = self.named_routes.get(name)
-            if not overwrite and registered and registered and registered is not route:
+            if not overwrite and registered and registered is not route:
                 raise RouteBuildError(f'Can`t register route, name `{name}` is already used')
             self.named_routes[name] = route
         return route
@@ -400,5 +396,3 @@ class RadiRouter:
         for k, r in [*self.named_routes.items()]:
             if r.pattern in pattern_set:
                 self.named_routes.pop(k)
-
-
