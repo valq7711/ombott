@@ -26,7 +26,7 @@ from .common_helpers import SimpleConfig    # noqa
 from .static_stream import static_file        # noqa
 
 __author__ = "Valery Kucherov <valq7711@gmail.com>"
-__copyright__ = "Copyright (c) 2009-2018, Marcel Hellkamp; Copyright (C) 2021 Valery Kucherov"
+__copyright__ = "Copyright (c) 2009-2012, Marcel Hellkamp; Copyright (C) 2021-2022 Valery Kucherov"
 __license__ = "MIT"
 
 __all__ = ('__version__', '__license__', '__copyright__', '__author__')
