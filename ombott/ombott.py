@@ -70,7 +70,7 @@ def run(app=None, server='wsgiref', host='127.0.0.1', port=8080,
         server.quiet = server.quiet or quiet
         if not server.quiet:
             _stderr("Ombott v%s server starting up (using %s)...\n" % (__version__, repr(server)))
-            _stderr("Listening on http://%s:%d/\n" % (server.host, server.port))
+            _stderr(f"Listening on http{'s' if kwargs.get('certfile', None) else ''}://{server.host}:{server.port}/\n")
             _stderr("Hit Ctrl-C to quit.\n\n")
         server.run(app)
     except KeyboardInterrupt:
