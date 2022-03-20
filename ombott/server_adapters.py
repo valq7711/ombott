@@ -15,12 +15,16 @@ class ServerAdapter(object):
         self.host = host
         self.port = int(port)
 
-    def run(self, handler):  # pragma: no cover
+    def run(self, handler):
         pass
 
+    @property
+    def is_secure(self):
+        return self.options.get('keyfile') is not None
+
     def __repr__(self):
-        args = ', '.join(['%s=%s' % (k, repr(v)) for k, v in self.options.items()])
-        return "%s(%s)" % (self.__class__.__name__, args)
+        args = ', '.join(f'{k}={repr(v)}' for k, v in self.options.items())
+        return f"{self.__class__}({args})"
 
 
 class CGIServer(ServerAdapter):
@@ -235,10 +239,14 @@ class EventletServer(ServerAdapter):
 
 
 class RocketServer(ServerAdapter):
-    """ Untested. """
     def run(self, handler):
         from rocket3 import Rocket3
-        server = Rocket3((self.host, self.port), 'wsgi', {'wsgi_app': handler})
+        ssl_args = []
+        if self.is_secure:
+            ssl_args = [self.options['keyfile'], self.options['certfile']]
+        server = Rocket3(
+            (self.host, self.port, *ssl_args), 'wsgi', {'wsgi_app': handler}
+        )
         server.start()
 
 
