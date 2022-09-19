@@ -166,7 +166,7 @@ class FormsDict(dict):
         except (UnicodeError, KeyError):
             return default
 
-    def __getattr__(self, name, default=str()):
+    def __getattr__(self, name, default=''):
         # Without this guard, pickle generates a cryptic TypeError:
         if name.startswith('__') and name.endswith('__'):
             return super().__getattr__(name)

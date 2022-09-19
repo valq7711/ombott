@@ -190,6 +190,7 @@ class BodyMixin:
             return post
 
         forms = env['ombott.request.forms'] = FormsDict()
+        forms.recode_unicode = False  # avoid for `multipart/form-data`
 
         safe_env = {'QUERY_STRING': ''}  # Build a safe environment for cgi
         for key in ('REQUEST_METHOD', 'CONTENT_TYPE', 'CONTENT_LENGTH'):
