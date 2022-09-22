@@ -91,7 +91,7 @@ class PropsMixin:
     def params(self):
         """ A :class:`FormsDict` with the combined values of :attr:`query` and
             :attr:`forms`. File uploads are stored in :attr:`files`. """
-        return FormsDict(self.query, **self.forms)
+        return self._forms_factory(self.query, **self.forms)  # FormsDict(self.query, **self.forms)
 
     @cache_in('environ[ ombott.request.url ]', read_only=True)
     def url(self):
