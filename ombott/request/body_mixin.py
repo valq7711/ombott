@@ -141,7 +141,7 @@ class BodyMixin:
             values are sometimes called "URL arguments" or "GET parameters", but
             not to be confused with "URL wildcards" as they are provided by the
             :class:`Router`. '''
-        ret = FormsDict()
+        ret = self._forms_factory()  # FormsDict()
         qs = self._env_get('QUERY_STRING', '')
         if qs:
             parse_qsl(qs, setitem = ret.__setitem__)
@@ -172,8 +172,8 @@ class BodyMixin:
 
         """
         env = self.environ
-        files = env['ombott.request.files'] = FormsDict()
-        post = FormsDict()
+        files = env['ombott.request.files'] = self._forms_factory()  # FormsDict()
+        post = self._forms_factory()  # FormsDict()
 
         # We default to application/x-www-form-urlencoded for everything that
         # is not multipart and take the fast path
@@ -189,7 +189,7 @@ class BodyMixin:
             env['ombott.request.forms'] = post
             return post
 
-        forms = env['ombott.request.forms'] = FormsDict()
+        forms = env['ombott.request.forms'] = self._forms_factory()  # FormsDict()
         forms.recode_unicode = False  # avoid for `multipart/form-data`
 
         safe_env = {'QUERY_STRING': ''}  # Build a safe environment for cgi

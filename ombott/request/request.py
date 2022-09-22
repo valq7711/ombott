@@ -3,7 +3,7 @@ from ..common_helpers import ts_props, SimpleConfig
 from ..mixable import Mixable
 
 from .props_mixin import PropsMixin
-from .body_mixin import BodyMixin
+from .body_mixin import BodyMixin, FormsDict
 
 
 class RequestConfig(SimpleConfig):
@@ -16,6 +16,8 @@ class RequestConfig(SimpleConfig):
 
 class BaseRequest:
     __slots__ = ('environ', '_env_get', '__listeners__', 'config', '_ts_props')
+
+    _forms_factory = FormsDict
 
     def __new__(cls, environ = None, *, config=None):
         self = super().__new__(cls)
