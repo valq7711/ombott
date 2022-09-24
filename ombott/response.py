@@ -2,7 +2,6 @@ from datetime import date as datedate, datetime, timedelta
 import email.utils
 import http.client as httplib
 from http.cookies import SimpleCookie
-import time
 import calendar
 
 from .common_helpers import (
