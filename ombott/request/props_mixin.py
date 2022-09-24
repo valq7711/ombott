@@ -1,10 +1,8 @@
 import base64
 import cgi
-from functools import partial
 from http.cookies import SimpleCookie
 from urllib.parse import (
     quote as urlquote,
-    unquote as urlunquote,
     urljoin,
     SplitResult as UrlSplitResult
 )
@@ -15,12 +13,8 @@ from ..common_helpers import (
 )
 from .helpers import (
     cache_in,
-    FormsDict,
     WSGIHeaderDict,
 )
-
-
-urlunquote = partial(urlunquote, encoding='latin1')
 
 
 def cgi_monkey_patch():
@@ -34,6 +28,7 @@ def cgi_monkey_patch():
 
 
 cgi_monkey_patch()
+del cgi_monkey_patch
 
 
 class PropsMixin:
@@ -71,10 +66,10 @@ class PropsMixin:
 
     @cache_in('environ[ ombott.request.cookies ]', read_only=True)
     def cookies(self):
-        """ Cookies parsed into a :class:`FormsDict`. Signed cookies are NOT
+        """ Cookies parsed into a :class:`CookieDict`. Signed cookies are NOT
             decoded. Use :meth:`get_cookie` if you expect signed cookies. """
         cookies = SimpleCookie(self._env_get('HTTP_COOKIE', '')).values()
-        return FormsDict((c.key, c.value) for c in cookies)
+        return self._cookie_factory((c.key, c.value) for c in cookies)
 
     def get_cookie(self, key, default=None, secret=None):
         """ Return the content of a cookie. To read a `Signed Cookie`, the

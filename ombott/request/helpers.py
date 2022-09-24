@@ -1,15 +1,12 @@
 import os
-from collections.abc import MutableMapping as DictMixin
 import re
+
+from collections.abc import MutableMapping as DictMixin
 from unicodedata import normalize
-from urllib.parse import unquote as _urlunquote
-from functools import partial
+from urllib.parse import unquote as urlunquote
 
 from ..common_helpers import touni, HeaderDict, HeaderProperty, cached_property
 from .. import errors
-
-
-urlunquote = partial(_urlunquote, encoding='latin1')
 
 
 # ------------------[ cachable property with a custom storage ] -------------------
@@ -130,47 +127,74 @@ def parse_qsl(qs, *, append: callable = None, setitem: callable = None):
 
 class FormsDict(dict):
     ''' This :class:`dict` subclass is used to store request form data.
-        Additionally to the normal dict-like item access methods (which return
-        unmodified data as native strings), this container also supports
-        attribute-like access to its values. Attributes are automatically de-
-        or recoded to match :attr:`input_encoding` (default: 'utf8'). Missing
-        attributes default to an empty string. '''
+        Additionally to the normal dict-like item access methods,
+        this container also supports attribute-like access to its values.
+        Missing attributes default to an empty string.
+    '''
+    def __getattr__(self, name: str):
+        # Without this guard, pickle generates a cryptic TypeError:
+        if name.startswith('__') and name.endswith('__'):
+            return super().__getattr__(name)
+        return self.get(name, '')
 
+
+class CookieDict(dict):
+    ''' This :class:`FormsDict` subclass is used to store request cookie data.
+        Additionally to the normal dict-like item access methods,
+        this container also supports attribute-like access to its values.
+        Attributes are automatically de- or recoded
+        to match :attr:`input_encoding` (default: 'utf8').
+        Missing  attributes default to an empty string.
+    '''
     #: Encoding used for attribute values.
     input_encoding = 'utf8'
-    #: If true (default), unicode strings are first encoded with `latin1`
-    #: and then decoded to match :attr:`input_encoding`.
-    recode_unicode = True
+    _decoded = False
 
-    def _fix(self, s, encoding=None):
-        if isinstance(s, str) and self.recode_unicode:  # Python 3 WSGI
-            return s.encode('latin1').decode(encoding or self.input_encoding)
+    def _fix(self, s, encoding: str):
+        if isinstance(s, str):
+            return s.encode('latin1').decode(encoding)
         else:
             return s
 
-    def decode(self, encoding=None):
+    def decode(self, encoding: str = None):
         ''' Returns a copy with all keys and values de- or recoded to match
             :attr:`input_encoding`. Some libraries (e.g. WTForms) want a
-            unicode dictionary. '''
-        copy = FormsDict()
-        enc = copy.input_encoding = encoding or self.input_encoding
-        copy.recode_unicode = False
+            unicode dictionary.
+        '''
+        if self._decoded:
+            if encoding is not None and encoding != self.input_encoding:
+                raise TypeError(
+                    f"Can't decode using '{encoding}', "
+                    f"as already decoded using another encoding: {self.input_encoding}"
+                )
+            copy = self.__class__(**self)
+            copy.input_encoding = self.input_encoding
+            copy._decoded = True
+            return copy
+
+        if encoding is None:
+            encoding = self.input_encoding
+        copy = self.__class__()
+        enc = copy.input_encoding = encoding
+        copy._decoded = True
         for key, value in self.items():
             copy[self._fix(key, enc)] = self._fix(value, enc)
         return copy
 
-    def getunicode(self, name, default=None, encoding=None):
+    def getunicode(self, name: str, default=None, encoding: str = None):
         ''' Return the value as a unicode string, or the default. '''
+        if encoding is None:
+            encoding = self.input_encoding
         try:
             return self._fix(self[name], encoding)
         except (UnicodeError, KeyError):
             return default
 
-    def __getattr__(self, name, default=''):
+    def __getattr__(self, name: str):
         # Without this guard, pickle generates a cryptic TypeError:
         if name.startswith('__') and name.endswith('__'):
             return super().__getattr__(name)
-        return self.getunicode(name, default=default)
+        return self.getunicode(name, default='')
 
 
 class WSGIHeaderDict(DictMixin):
