@@ -1,5 +1,5 @@
 import pytest
-from ombott.request.helpers import FormsDict, CookieDict
+from ombott.request_pkg.helpers import FormsDict, CookieDict
 
 
 def test_formsdict():

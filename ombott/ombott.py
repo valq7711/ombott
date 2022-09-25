@@ -13,7 +13,7 @@ from .common_helpers import (
     SimpleConfig,
 )
 from .router import HookTypes, RadiRouter
-from .request import Request, errors as request_errors
+from .request_pkg import Request, errors as request_errors
 from .response import Response, HTTPResponse, HTTPError
 from . import server_adapters
 from . import error_render

@@ -1,7 +1,7 @@
 import pytest
 from io import BytesIO
-from ombott.request.body_mixin import _body_read, _iter_chunked
-from ombott.request.errors import BodyParsingError, BodySizeError
+from ombott.request_pkg.body_mixin import _body_read, _iter_chunked
+from ombott.request_pkg.errors import BodyParsingError, BodySizeError
 
 
 
