@@ -131,6 +131,9 @@ class FormsDict(dict):
         this container also supports attribute-like access to its values.
         Missing attributes default to an empty string.
     '''
+    def copy(self):
+        return self.__class__(**self)
+
     def __getattr__(self, name: str):
         # Without this guard, pickle generates a cryptic TypeError:
         if name.startswith('__') and name.endswith('__'):
