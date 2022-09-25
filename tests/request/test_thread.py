@@ -1,6 +1,6 @@
 
 import pytest
-from ombott.request import Request
+from ombott.request_pkg import Request
 import threading
 
 result = {'seq': []}
