@@ -129,7 +129,7 @@ class FormsDict(dict):
     ''' This :class:`dict` subclass is used to store request form data.
         Additionally to the normal dict-like item access methods,
         this container also supports attribute-like access to its values.
-        Missing attributes default to an empty string.
+        Missing attributes default to `None`.
     '''
     def copy(self):
         return self.__class__(**self)
@@ -138,7 +138,7 @@ class FormsDict(dict):
         # Without this guard, pickle generates a cryptic TypeError:
         if name.startswith('__') and name.endswith('__'):
             return super().__getattr__(name)
-        return self.get(name, '')
+        return self.get(name, None)
 
 
 class CookieDict(dict):
@@ -147,7 +147,7 @@ class CookieDict(dict):
         this container also supports attribute-like access to its values.
         Attributes are automatically de- or recoded
         to match :attr:`input_encoding` (default: 'utf8').
-        Missing  attributes default to an empty string.
+        Missing  attributes default to `None`.
     '''
     #: Encoding used for attribute values.
     input_encoding = 'utf8'
@@ -197,7 +197,7 @@ class CookieDict(dict):
         # Without this guard, pickle generates a cryptic TypeError:
         if name.startswith('__') and name.endswith('__'):
             return super().__getattr__(name)
-        return self.getunicode(name, default='')
+        return self.getunicode(name)
 
 
 class WSGIHeaderDict(DictMixin):
