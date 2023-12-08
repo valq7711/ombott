@@ -1,10 +1,11 @@
 import json as json_mod
-import cgi
 from tempfile import TemporaryFile
 from io import BytesIO
 from functools import partial
+import re
 
 from ..common_helpers import touni
+from .multipart import MultipartMarkup, FieldStorage
 
 from .helpers import (
     parse_qsl,
@@ -14,15 +15,7 @@ from .helpers import (
 from .errors import RequestError, BodyParsingError, BodySizeError
 
 
-# fix bug cgi.FieldStorage context manager bug https://github.com/python/cpython/pull/14815
-def _cgi_monkey_patch():
-    def patch_exit(self, *exc):
-        if self.file is not None:
-            self.file.close()
-    cgi.FieldStorage.__exit__ = patch_exit
-
-
-_cgi_monkey_patch()
+MULTIPART_BOUNDARY_PATT = re.compile(r'^multipart/.+?boundary=(.+?)(;|$)')
 
 
 def _iter_body(read, buff_size, *, content_length):
@@ -85,14 +78,19 @@ def _iter_chunked(read, buff_size):
             raise parsing_err
 
 
-def _body_read(read, buff_size, *, content_length = None, chunked = None, max_body_size = None):
+def _body_read(
+        read, buff_size, *, content_length=None, chunked=None, max_body_size=None, markup: MultipartMarkup = None
+):
     body_iter = (
         _iter_chunked if chunked
-        else partial(_iter_body, content_length = content_length)
+        else partial(_iter_body, content_length=content_length)
     )
     body, body_size, is_temp_file = BytesIO(), 0, False
     for part in body_iter(read, buff_size):
         body.write(part)
+        if markup is not None:
+            markup.parse(part)
+
         body_size += len(part)
         if max_body_size is not None and body_size > max_body_size:
             raise BodySizeError()
@@ -143,7 +141,7 @@ class BodyMixin:
         ret = self._forms_factory()
         qs = self._env_get('QUERY_STRING', '')
         if qs:
-            parse_qsl(qs, setitem = ret.__setitem__)
+            parse_qsl(qs, setitem=ret.__setitem__)
         self.environ['ombott.request.get'] = ret
         return ret
 
@@ -167,7 +165,7 @@ class BodyMixin:
     def POST(self):
         """ The values of :attr:`forms` and :attr:`files` combined into a single
             :class:`FormsDict`. Values are either strings (form values) or
-            instances of :class:`cgi.FieldStorage` (file uploads).
+            instances of :class:`BytesIOProxy` (file uploads).
 
         """
         env = self.environ
@@ -183,47 +181,42 @@ class BodyMixin:
             else:
                 parse_qsl(
                     touni(self._get_body_string(), 'latin1'),
-                    setitem = post.__setitem__
+                    setitem=post.__setitem__
                 )
             env['ombott.request.forms'] = post
             return post
 
         forms = env['ombott.request.forms'] = self._forms_factory()
 
-        safe_env = {'QUERY_STRING': ''}  # Build a safe environment for cgi
-        for key in ('REQUEST_METHOD', 'CONTENT_TYPE', 'CONTENT_LENGTH'):
-            if key in env:
-                safe_env[key] = env[key]
-        args = dict(
-            fp=self.body,
-            environ=safe_env,
-            keep_blank_values=True,
-            encoding='utf8'
-        )
+        body = self.body
+        markup: MultipartMarkup = body.ombott_markup
+        if markup is None:
+            # should never happen since we check content-type
+            # when reading body
+            raise BodyParsingError()
+        elif markup.error is not None:
+            raise markup.error
         listified = set()
-        with cgi.FieldStorage(**args) as data:
-            self['_cgi.FieldStorage'] = data  # http://bugs.python.org/issue18394#msg207958
-            data = data.list or []
-            for item in data:
-                if item.filename:
-                    it = FileUpload(
-                        item.file, item.name,
-                        item.filename, item.headers
-                    )
-                    dct = files
-                else:
-                    it = item.value
-                    dct = forms
-                key = item.name
+        for item in FieldStorage.iter_items(body, markup.markups, self.config.max_memfile_size):
+            if item.filename:
+                it = FileUpload(
+                    item.file, item.name,
+                    item.filename, item.headers
+                )
+                dct = files
+            else:
+                it = item.value
+                dct = forms
+            key = item.name
 
-                if key in post:
-                    el = post[key]
-                    if key not in listified:
-                        el = post[key] = dct[key] = [el]
-                        listified.add(key)
-                    el.append(it)
-                else:
-                    post[key] = dct[key] = it
+            if key in post:
+                el = post[key]
+                if key not in listified:
+                    el = post[key] = dct[key] = [el]
+                    listified.add(key)
+                el.append(it)
+            else:
+                post[key] = dct[key] = it
         return post
 
     @cache_in('environ[ ombott.request.forms ]', read_only=True)
@@ -247,14 +240,20 @@ class BodyMixin:
 
     @cache_in('environ[ ombott.request.body ]', read_only=True)
     def _body(self):
+        markup = None
+        mp = MULTIPART_BOUNDARY_PATT.match(self.environ.get('CONTENT_TYPE', ''))
+        if mp is not None:
+            markup = MultipartMarkup(mp.group(1))
         try:
             body = _body_read(
                 self.environ['wsgi.input'].read,
                 self.config.max_memfile_size,
-                content_length = self.content_length,
-                chunked = self.chunked,
-                max_body_size = self.config.max_body_size
+                content_length=self.content_length,
+                chunked=self.chunked,
+                max_body_size=self.config.max_body_size,
+                markup=markup
             )
+            body.ombott_markup = markup
         except RequestError as err:
             self._raise(err, RequestError)
         self.environ['wsgi.input'] = body
