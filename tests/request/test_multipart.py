@@ -1,4 +1,4 @@
-from typing import Iterable
+from typing import Iterable, List
 import pytest
 from io import BytesIO
 from ombott.request_pkg.multipart import MultipartMarkup, FieldStorage
@@ -22,7 +22,7 @@ class Field:
         return '\r\n' + headers + ('\r\n' * 2) + self.value
 
 
-def make_body(form: list[Field], boundary: str) -> str:
+def make_body(form: List[Field], boundary: str) -> str:
     hyphen_boundary = '--' + boundary
     token = '\r\n' + hyphen_boundary
     body = token.join([f.dump() for f in form])
@@ -31,7 +31,7 @@ def make_body(form: list[Field], boundary: str) -> str:
 
 
 @pytest.fixture
-def form() -> list[Field]:
+def form() -> List[Field]:
     fields = [
         Field(name=f, value=f'{f}-value')
         for f in 'foo bar baz'.split()
@@ -54,7 +54,7 @@ def body(form, boundary) -> BytesIO:
 
 
 @pytest.fixture
-def chunks(body: BytesIO) -> list[bytes]:
+def chunks(body: BytesIO) -> List[bytes]:
     body = body.getvalue()
     print(body)
     chunked = []
@@ -90,7 +90,7 @@ def test_markup(markup: MultipartMarkup):
     print(markup.markups)
 
 
-def test_read_multipart(field_store: Iterable[FieldStorage], form: list[Field]):
+def test_read_multipart(field_store: Iterable[FieldStorage], form: List[Field]):
     fields_num = len(form)
     iter_form = iter(form)
     i = 0
