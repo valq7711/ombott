@@ -1,4 +1,4 @@
-from typing import Optional, Iterable, Union
+from typing import Optional, Iterable, Union, Tuple, Dict
 from types import SimpleNamespace
 from collections import defaultdict
 from io import BytesIO
@@ -184,7 +184,7 @@ class BodyMarkuper:
         self._eat_headers = self.headers_eater.eat
         self.stopped = False
 
-    def iter_markup(self, chunk: bytes) -> Iterable[tuple[str, tuple[int, int]]]:
+    def iter_markup(self, chunk: bytes) -> Iterable[Tuple[str, Tuple[int, int]]]:
         if self.stopped:
             raise StopMarkupException()
         cur_meth = self.cur_meth
@@ -376,7 +376,7 @@ class BytesIOProxy:
 class Header(SimpleNamespace):
     name: str
     value: str
-    options: dict[str, str]
+    options: Dict[str, str]
 
 
 class FieldStorage:
@@ -388,7 +388,7 @@ class FieldStorage:
     filename: Optional[str]
     file: Optional['BytesIOProxy']
     ctype: Optional[str]
-    headers: dict[str, Header]
+    headers: Dict[str, Header]
 
     def __init__(self):
         self.name = None
@@ -399,7 +399,7 @@ class FieldStorage:
         self.headers = {}
 
     def read(
-            self, src: BytesIO, headers_section: tuple[int, int], data_section: tuple[int, int], *, max_read: int
+            self, src: BytesIO, headers_section: Tuple[int, int], data_section: Tuple[int, int], *, max_read: int
     ) -> int:
 
         start, end = headers_section
