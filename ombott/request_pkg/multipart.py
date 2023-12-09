@@ -4,7 +4,7 @@ from collections import defaultdict
 from io import BytesIO
 import re
 
-from .errors import BodyParsingError, BodySizeError
+from ombott.request_pkg.errors import BodyParsingError, BodySizeError
 
 
 class BaseMarkupException(BodyParsingError):
@@ -33,19 +33,19 @@ class MatchTail:
         self.len = len(token)
         self.idx = idx = defaultdict(list)   # 1-based indices for each token symbol
         for i, c in enumerate(token, start=1):
-            idx[c].append(i)
+            idx[c].append([i, token[:i]])
 
-    def match_tail(self, s: bytes) -> Optional[int]:
-        slen = len(s)
-        assert slen <= self.len
-        idxs = self.idx.get(s[-1])
+    def match_tail(self, s: bytes, start: int, end: int) -> Optional[int]:
+        idxs = self.idx.get(s[end - 1])
         if idxs is None:
             return
-        token = self.token
-        for i in idxs:  # idxs is 1-based index, so 'abc'[:i] returns 'a', if i == 1
-            if slen < i:
+        slen = end - start
+        assert slen <= self.len
+        for i, thead in idxs:  # idxs is 1-based index
+            search_pos = slen - i
+            if search_pos < 0:
                 return
-            if token[:i] == s[-i:]:  # if token_head == s_tail
+            if s[start + search_pos:end] == thead:  # if s_tail == token_head
                 return i
 
 
@@ -260,22 +260,24 @@ class BodyMarkuper:
             return end_section
 
     def _eat_data(self, chunk: bytes, base: int):
+        chunk_len = len(chunk)
         token, tlen, trest, trest_len = self.token, self.tlen, self.trest, self.trest_len
         start = base
         mt = self.mt
+        part = None
         while True:
             end = start + tlen
-            part = chunk[start:end]
-            if len(part) < tlen:
+            if end > chunk_len:
+                part = chunk[start:]
                 break
             if trest is not None:
-                if part.startswith(trest):
+                if chunk[start:start + trest_len] == trest:   # part.startswith(trest):
                     data_end = start + trest_len - tlen
                     self.trest_len = self.trest = None
                     return data_end
                 else:
                     trest_len = trest = None
-            matched_len = mt.match_tail(part)
+            matched_len = mt.match_tail(chunk, start, end)
             if matched_len is not None:
                 if matched_len == tlen:
                     self.trest_len = self.trest = None
@@ -287,8 +289,8 @@ class BodyMarkuper:
 
         # process the tail of the chunk
         if part:
+            part_len = len(part)
             if trest is not None:
-                part_len = len(part)
                 if part_len < trest_len:
                     if trest.startswith(part):
                         trest_len -= part_len
@@ -305,7 +307,7 @@ class BodyMarkuper:
 
             if part is not None:
                 assert trest is None
-                matched_len = mt.match_tail(part)
+                matched_len = mt.match_tail(part, 0, part_len)
                 if matched_len is not None:
                     trest_len, trest = tlen - matched_len, token[matched_len:]
 
@@ -486,5 +488,3 @@ class FieldStorage:
 
             headers = next(iter_markup, None)
             data = next(iter_markup, None)
-
-
