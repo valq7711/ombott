@@ -1,10 +1,12 @@
 from pathlib import Path
+import html as sanitize_html
 
 html = Path(__file__).parent / 'error.html'
 
 _html_lns = []
 
 def render(err_resp, url, debug):
+    clean_url = sanitize_html.escape(url)
     ex = traceback = '-] Forbidden [-'
     if debug:
         traceback = err_resp.traceback
@@ -17,7 +19,7 @@ def render(err_resp, url, debug):
         e = err_resp,
         exception = ex,
         traceback = traceback,
-        url = repr(url)
+        url = repr(clean_url)
     )
 
     if not _html_lns:
