@@ -18,7 +18,7 @@ from .response import Response, HTTPResponse, HTTPError
 from . import server_adapters
 from . import error_render
 
-__version__ = "2.0"
+__version__ = "2.1"
 
 HTTP_METHODS = 'DELETE GET HEAD OPTIONS PATCH POST PUT'.split()
 
