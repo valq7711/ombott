@@ -1,7 +1,7 @@
 from typing import Iterable, List
 import pytest
-from io import BytesIO
-from ombott.request_pkg.multipart import MultipartMarkup, FieldStorage
+from io import BytesIO, SEEK_CUR, SEEK_END
+from ombott.request_pkg.multipart import MultipartMarkup, FieldStorage, BytesIOProxy
 
 
 class Field:
@@ -104,3 +104,31 @@ def test_read_multipart(field_store: Iterable[FieldStorage], form: List[Field]):
         else:
             assert src.value == parsed.value
     assert fields_num == i
+
+
+def test_bytes_io_proxy():
+    proxied_bytes_1 = b'some '
+    proxied_bytes_2 = b'bytes'
+    proxied_bytes = proxied_bytes_1 + proxied_bytes_2
+    start = 3
+    end = start + len(proxied_bytes)
+    src_body = (b' ' * start) + proxied_bytes + (b' ' * 5)
+    bytes_src = BytesIO(src_body)
+    bytes_proxy = BytesIOProxy(bytes_src, start, end)
+
+    assert bytes_proxy.read() == proxied_bytes
+    bytes_proxy.seek(0)
+    assert bytes_proxy.read(100) == proxied_bytes
+
+    bytes_proxy.seek(len(proxied_bytes_1))
+    assert bytes_proxy.read(len(proxied_bytes_2)) == proxied_bytes_2
+
+    bytes_proxy.seek(0)
+    bytes_proxy.read(len(proxied_bytes_1) - 1)
+    bytes_proxy.seek(1, SEEK_CUR)
+    assert bytes_proxy.read() == proxied_bytes_2
+
+    bytes_proxy.seek(100)
+    assert bytes_proxy.tell() == len(proxied_bytes)
+    bytes_proxy.seek(-len(proxied_bytes_2), SEEK_END)
+    assert bytes_proxy.read() == proxied_bytes_2

@@ -1,7 +1,7 @@
 from typing import Optional, Iterable, Union, Tuple, Dict
 from types import SimpleNamespace
 from collections import defaultdict
-from io import BytesIO
+from io import BytesIO, SEEK_CUR, SEEK_SET, SEEK_END
 import re
 
 from ombott.request_pkg.errors import BodyParsingError, BodySizeError
@@ -345,10 +345,21 @@ class BytesIOProxy:
     def tell(self) -> int:
         return self._pos - self._st
 
-    def seek(self, pos: int):
-        if pos < 0:
-            pos = 0
-        self._pos = min(self._st + pos, self._end)
+    def seekable(self) -> bool:
+        return True
+
+    def seek(self, pos: int, whence=SEEK_SET) -> int:
+        if whence == SEEK_SET:
+            if pos < 0:
+                pos = 0
+            self._pos = min(self._st + pos, self._end)
+        elif whence == SEEK_CUR:
+            self.seek(self.tell() + pos)
+        elif whence == SEEK_END:
+            self.seek(self._end + pos - self._st)
+        else:
+            raise ValueError(f'Unexpected whence: {whence}')
+        return self.tell()
 
     def read(self, sz: int = None) -> bytes:
         max_sz = self._end - self._pos
