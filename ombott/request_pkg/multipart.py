@@ -348,6 +348,9 @@ class BytesIOProxy:
     def seekable(self) -> bool:
         return True
 
+    def readable(self) -> bool:
+        return True
+
     def seek(self, pos: int, whence=SEEK_SET) -> int:
         if whence == SEEK_SET:
             if pos < 0:
