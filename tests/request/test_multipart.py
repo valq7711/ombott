@@ -1,6 +1,6 @@
 from typing import Iterable, List
 import pytest
-from io import BytesIO, SEEK_CUR, SEEK_END
+from io import BytesIO, SEEK_CUR, SEEK_END, TextIOWrapper
 from ombott.request_pkg.multipart import MultipartMarkup, FieldStorage, BytesIOProxy
 
 
@@ -84,6 +84,19 @@ def field_store(body: BytesIO, markup: MultipartMarkup) -> Iterable[FieldStorage
     return FieldStorage.iter_items(body, markup.markups, max_read=10000)
 
 
+@pytest.fixture
+def bytes_proxy() -> BytesIOProxy:
+    proxied_bytes_1 = b'some \n'
+    proxied_bytes_2 = b'bytes'
+    proxied_bytes = proxied_bytes_1 + proxied_bytes_2
+    start = 3
+    end = start + len(proxied_bytes)
+    src_body = (b' ' * start) + proxied_bytes + (b' ' * 5)
+    bytes_src = BytesIO(src_body)
+    bytes_proxy = BytesIOProxy(bytes_src, start, end)
+    return bytes_proxy
+
+
 def test_markup(markup: MultipartMarkup):
     print('error', markup.error)
     assert len(markup.markups) > 0
@@ -132,3 +145,39 @@ def test_bytes_io_proxy():
     assert bytes_proxy.tell() == len(proxied_bytes)
     bytes_proxy.seek(-len(proxied_bytes_2), SEEK_END)
     assert bytes_proxy.read() == proxied_bytes_2
+
+
+def test_bytes_io_proxy_shutil(bytes_proxy: BytesIOProxy):
+    import shutil
+    import tempfile
+    proxied_bytes = bytes_proxy.read()
+    assert proxied_bytes
+    bytes_proxy.seek(0)
+    try:
+        dst = tempfile.NamedTemporaryFile(delete=False)
+        shutil.copyfileobj(bytes_proxy, dst)
+        dst.close()
+        with open(dst.name, 'rb') as dst:
+            assert dst.read() == proxied_bytes
+    finally:
+        import os
+        os.unlink(dst.name)
+
+
+def test_bytes_io_proxy_text_wrapper(bytes_proxy: BytesIOProxy):
+    proxied_bytes = bytes_proxy.read()
+    assert proxied_bytes
+    bytes_proxy.seek(0)
+    with TextIOWrapper(bytes_proxy, encoding='utf8') as txt:
+        assert txt.read() == proxied_bytes.decode()
+
+    bytes_proxy.seek(0)
+    with TextIOWrapper(bytes_proxy, encoding='utf8', newline='') as txt:
+        ln = txt.readline()
+        assert ln.rstrip('\n') == proxied_bytes.decode().split('\n', 1)[0]
+
+    bytes_proxy.seek(0)
+    with TextIOWrapper(bytes_proxy, encoding='utf8', newline='') as txt:
+        lns = [it.rstrip('\n') for it in txt.readlines()]
+        assert lns == proxied_bytes.decode().split('\n')
+        print(proxied_bytes.decode().split('\n'))

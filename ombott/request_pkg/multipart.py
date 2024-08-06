@@ -342,6 +342,9 @@ class BytesIOProxy:
         self._end = end
         self._pos = start
 
+    def isatty(self) -> bool:
+        return False
+
     def tell(self) -> int:
         return self._pos - self._st
 
@@ -382,10 +385,14 @@ class BytesIOProxy:
     def fileno(self):
         raise OSError('Not supported')
 
-    def closed(self):
-        return self._src.closed()
+    @property
+    def closed(self) -> bool:
+        return self._src.closed
 
     def close(self):
+        pass
+
+    def flush(self):
         pass
 
 
