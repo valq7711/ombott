@@ -118,7 +118,7 @@ class PropsMixin:
     def fullpath(self):
         """ Request path including :attr:`script_name` (if present). """
         appname = self._env_get(self.config.app_name_header, '/')
-        return urljoin(self.script_name, self.path[len(appname):].lstrip('/'))
+        return urljoin(self.script_name, self.path[len(appname)+1:].lstrip('/'))
 
     @property
     def query_string(self):
