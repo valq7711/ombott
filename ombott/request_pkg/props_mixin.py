@@ -1,5 +1,4 @@
 import base64
-import cgi
 from http.cookies import SimpleCookie
 from urllib.parse import (
     quote as urlquote,
@@ -15,20 +14,6 @@ from .helpers import (
     cache_in,
     WSGIHeaderDict,
 )
-
-
-def cgi_monkey_patch():
-    """Fix bug cgi.FieldStorage context manager bug https://github.com/python/cpython/pull/14815
-
-    """
-    def patch_exit(self, *exc):
-        if self.file is not None:
-            self.file.close()
-    cgi.FieldStorage.__exit__ = patch_exit
-
-
-cgi_monkey_patch()
-del cgi_monkey_patch
 
 
 class PropsMixin:
