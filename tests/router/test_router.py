@@ -3,7 +3,7 @@ from ombott.router import RadiRouter, Route
 from ombott.router.errors import RouteMethodError
 
 
-route_meth_handler_path = [
+_route_meth_handler_path = [
     ('/foo/bar', 'GET', 'foo_bar:get', '/foo/bar'),
     ('/foo/bar', 'POST', 'foo_bar:post', '/foo/bar/'),
     ('/foo/bar', ['PUT', 'PATCH'], 'foo_bar:put,patch', 'foo/bar'),
@@ -23,6 +23,13 @@ route_meth_handler_path = [
     ('/path/{pth:path()}/end', 'GET', dict(pth='this/path/to'), '/path/this/path/to/end'),
     ('/path1/{pth:path()}end', 'GET', dict(pth='this/path/to-'), '/path1/this/path/to-end'),
 ]
+
+
+def make_handler(v):
+    return lambda: v
+
+
+route_meth_handler_path = [(r, m, make_handler(h), p) for r, m, h, p in _route_meth_handler_path]
 
 
 def expand_params():
@@ -57,7 +64,8 @@ def exist_rule_paths():
         name, rule, meth, handler, path = it
         print(name or '<no>', rule)
         pattern = RadiRouter.to_pattern(rule)
-        if handler not in [404, 405] and pattern not in seen:
+        handler_val = handler()
+        if handler_val not in [404, 405] and pattern not in seen:
             ret.append([name, rule, path])
             seen.add(pattern)
     return ret
@@ -78,7 +86,7 @@ def routes():
     return route_meth_handler_path[:]
 
 
-@pytest.fixture(params = expand_params())
+@pytest.fixture(params=expand_params())
 def routes_iter(request):
     return request.param
 
@@ -88,19 +96,20 @@ class TestRoutes:
         name, rule, meth, handler, path = routes_iter
         path, _, path_meth = path.partition(':')
         end_point, err404_405 = router.resolve(path, path_meth or meth)
+        handler_val = handler()
         if end_point is None:
-            assert handler in {404, 405}
-            assert err404_405[0] == handler
+            assert handler_val in [404, 405]
+            assert err404_405[0] == handler_val
         else:
             assert handler is not None
             route_meth, params, hooks = end_point
-            assert route_meth.handler == handler
+            assert route_meth.handler is handler
             if isinstance(meth, str):
                 assert route_meth.name == meth
             else:
                 assert route_meth.name == meth[0]
             if params:
-                assert params == handler
+                assert params == handler_val
             if name:
                 assert router[name][meth] is route_meth
 
@@ -164,3 +173,10 @@ def test_remove_method(fresh_router: RadiRouter):
     route_meth, err = router.resolve('/foo/bar', 'GET')
     assert err[0] == 405
     assert router.resolve('/foo/bar')
+
+
+if __name__ == '__main__':
+    pytest.main([
+        '-o', 'log_cli=true', '-o', 'log_cli_level=INFO',
+        '-s', '-vvv', '-k', 'routes', 'tests'
+    ])
