@@ -35,6 +35,7 @@ class DefaultConfig(SimpleConfig):
         request_errors.RequestError: HTTPError(400, 'Bad request'),
         request_errors.BodySizeError: HTTPError(413, 'Request entity too large'),
         request_errors.BodyParsingError: HTTPError(400, 'Error while parsing chunked transfer body'),
+        request_errors.JSONParsingError: HTTPError(400, 'Invalid json'),
     }
     max_body_size = None
     max_memfile_size = 100 * 1024

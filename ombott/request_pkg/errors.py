@@ -9,3 +9,6 @@ class BodyParsingError(RequestError):
 
 class BodySizeError(RequestError):
     pass
+
+class JSONParsingError(RequestError):
+    pass

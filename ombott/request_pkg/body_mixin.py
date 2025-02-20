@@ -12,7 +12,7 @@ from .helpers import (
     cache_in,
     FileUpload,
 )
-from .errors import RequestError, BodyParsingError, BodySizeError
+from .errors import RequestError, BodyParsingError, BodySizeError, JSONParsingError
 
 
 MULTIPART_BOUNDARY_PATT = re.compile(r'^multipart/.+?boundary=(.+?)(;|$)')
@@ -158,7 +158,10 @@ class BodyMixin:
             b = self._get_body_string()
             if not b:
                 return None
-            return json_mod.loads(b)
+            try:
+                return json_mod.loads(b)
+            except (ValueError, TypeError):
+                self._raise(JSONParsingError())
         return None
 
     @cache_in('environ[ ombott.request.post ]', read_only=True)
@@ -177,7 +180,9 @@ class BodyMixin:
         ctype = self.content_type
         if not ctype.startswith('multipart/'):
             if ctype.startswith('application/json'):
-                post.update(self.json)
+                json_body = self.json
+                if isinstance(json_body, dict):
+                    post.update(json_body)
             else:
                 parse_qsl(
                     touni(self._get_body_string(), 'latin1'),
