@@ -3,7 +3,8 @@ import mimetypes
 import time
 
 import email.utils
-
+import unicodedata
+from urllib.parse import quote
 from .common_helpers import parse_date
 from .response import HTTPResponse, HTTPError
 from .ombott import Globals
@@ -48,6 +49,25 @@ def _file_iter_range(fp, offset, bytes_len, maxread=1024 * 1024):
         bytes_len -= len(part)
         yield part
         part = fp.read(min(bytes_len, maxread))
+
+
+def make_disposition_header(file_name, disposition_type="attachment"):
+    """
+    Set content headers according to RFC 5987
+
+    :param file_name: str|unicode
+    :param disposition_type: str
+    :return:
+    """
+    ascii_name = (
+        unicodedata.normalize("NFKD", file_name).encode("ascii", "replace").decode()
+    )
+    header = f'{disposition_type}; filename="{ascii_name}"'
+    if ascii_name != file_name:
+        quoted_name = quote(file_name)
+        header += f"; filename*=UTF-8''{quoted_name}"
+
+    return header
 
 
 def static_file(filename, root, mimetype='auto', download=False, charset='UTF-8'):
@@ -95,7 +115,7 @@ def static_file(filename, root, mimetype='auto', download=False, charset='UTF-8'
 
     if download:
         download = os_path.basename(filename if download is True else download)
-        headers['Content-Disposition'] = 'attachment; filename="%s"' % download
+        headers['Content-Disposition'] = make_disposition_header(download)
 
     stats = os.stat(filename)
     headers['Content-Length'] = clen = stats.st_size
